@@ -33,6 +33,18 @@ cmake --build build/dev
 - **`release`** — optimized build to deploy on the phone.
 - **`dev`** — Debug with warnings-as-errors; use it while developing.
 
+On the PinePhone under sxmo-de-sway, build the release preset and launch it on
+the next unused numeric workspace:
+
+```sh
+cmake --preset release
+cmake --build build/release
+scripts/run-phone-next-workspace.sh --release
+```
+
+Without a preset flag, the script uses the first executable it finds in
+`build/release`, `build/dev`, then `build/debug`.
+
 Run the tests (pure game logic, no display needed):
 
 ```sh
