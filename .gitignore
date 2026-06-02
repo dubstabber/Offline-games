@@ -1,0 +1,14 @@
+# Build output
+/build/
+*.o
+*.a
+
+# Editor / tooling
+.cache/
+compile_commands.json
+*.swp
+.DS_Store
+
+# Claude Code transient state (keep .claude/skills/, ignore runtime locks)
+.claude/scheduled_tasks.lock
+.claude/*.lock

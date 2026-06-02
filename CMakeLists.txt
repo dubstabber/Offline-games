@@ -1,0 +1,48 @@
+cmake_minimum_required(VERSION 3.20)
+project(offline-games LANGUAGES CXX)
+
+# ---- Standard ----------------------------------------------------------------
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Export compile_commands.json for clang-tidy / editors.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# ---- Warnings ----------------------------------------------------------------
+# Strict by default; the `dev` preset additionally turns these into errors.
+add_library(project_warnings INTERFACE)
+target_compile_options(project_warnings INTERFACE
+    -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
+    -Wnon-virtual-dtor -Wold-style-cast -Woverloaded-virtual -Wnull-dereference)
+
+# ---- Dependencies ------------------------------------------------------------
+find_package(SDL3 REQUIRED CONFIG)
+find_package(SDL3_ttf REQUIRED CONFIG)
+
+# ---- Engine library (everything except main, so tests can link it) -----------
+add_library(engine STATIC
+    src/core/App.cpp
+    src/core/SceneManager.cpp
+    src/core/FontManager.cpp
+    src/core/Canvas.cpp
+    src/ui/Button.cpp
+    src/ui/Label.cpp
+    src/games/GameRegistry.cpp
+    src/games/tictactoe/TicTacToeBoard.cpp
+    src/games/tictactoe/TicTacToeScene.cpp
+    src/scenes/MenuScene.cpp)
+target_include_directories(engine PUBLIC src)
+target_link_libraries(engine
+    PUBLIC SDL3::SDL3 SDL3_ttf::SDL3_ttf
+    PRIVATE project_warnings)
+
+# ---- Executable --------------------------------------------------------------
+add_executable(offline-games src/main.cpp)
+target_link_libraries(offline-games PRIVATE engine project_warnings)
+
+# ---- Tests -------------------------------------------------------------------
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
