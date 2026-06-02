@@ -108,6 +108,9 @@ void DifficultySelectScene::setDifficulty(Difficulty difficulty) {
 }
 
 bool DifficultySelectScene::handleBackButton(const PointerEvent& event) {
+    if (event.phase == PointerEvent::Phase::Move) {
+        return false;
+    }
     const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
                                 kBackRadius * 2.0F, kBackRadius * 2.0F);
     if (event.phase == PointerEvent::Phase::Down) {
@@ -127,15 +130,49 @@ void DifficultySelectScene::handleInput(const PointerEvent& event) {
     if (handleBackButton(event)) {
         return;
     }
-    // Tap anywhere on the (generously sized) track to snap the knob.
-    if (event.phase == PointerEvent::Phase::Down &&
-        hitTest(event, kTrackX - 40.0F, kTrackCy - 50.0F, kTrackW + 80.0F, 100.0F)) {
-        const float t = std::clamp((event.x - kTrackX) / kTrackW, 0.0F, 1.0F);
-        const auto stop = static_cast<int>(std::lround(t * 2.0F)); // 0, 1, or 2
-        setDifficulty(static_cast<Difficulty>(stop));
+    if (handleSlider(event)) {
         return;
     }
     playButton_.handleInput(event);
+}
+
+// Drag the knob along the track. A press on the (generously sized) track starts
+// a drag; subsequent moves slide the knob under the finger; release ends it.
+// While dragging, the difficulty snaps live to the nearest of the three stops.
+bool DifficultySelectScene::handleSlider(const PointerEvent& event) {
+    constexpr float kHitX = kTrackX - 40.0F;
+    constexpr float kHitW = kTrackW + 80.0F;
+    constexpr float kHitY = kTrackCy - 50.0F;
+    constexpr float kHitH = 100.0F;
+    switch (event.phase) {
+    case PointerEvent::Phase::Down:
+        if (hitTest(event, kHitX, kHitY, kHitW, kHitH)) {
+            draggingKnob_ = true;
+            dragKnobTo(event.x);
+            return true;
+        }
+        return false;
+    case PointerEvent::Phase::Move:
+        if (draggingKnob_) {
+            dragKnobTo(event.x);
+            return true;
+        }
+        return false;
+    case PointerEvent::Phase::Up:
+        if (draggingKnob_) {
+            draggingKnob_ = false;
+            return true;
+        }
+        return false;
+    }
+    return false;
+}
+
+void DifficultySelectScene::dragKnobTo(float x) {
+    knobX_ = std::clamp(x, kTrackX, kTrackX + kTrackW);
+    const float t = (knobX_ - kTrackX) / kTrackW;
+    const auto stop = static_cast<int>(std::lround(t * 2.0F)); // nearest of 0, 1, 2
+    setDifficulty(static_cast<Difficulty>(stop));
 }
 
 void DifficultySelectScene::update(float /*dtSeconds*/) {}
@@ -167,7 +204,7 @@ void DifficultySelectScene::render(Canvas& canvas) {
     // Slider: background track, coloured fill up to the knob, then the knob.
     canvas.fillRoundedRect(kTrackX, kTrackCy - (kTrackH / 2.0F), kTrackW, kTrackH, kTrackH / 2.0F,
                            kTrackBg);
-    const float knobX = stopX(difficulty_);
+    const float knobX = draggingKnob_ ? knobX_ : stopX(difficulty_);
     canvas.fillRoundedRect(kTrackX, kTrackCy - (kTrackH / 2.0F), knobX - kTrackX, kTrackH,
                            kTrackH / 2.0F, color(difficulty_));
     canvas.fillCircle(knobX, kTrackCy, kKnobRadius, colors::white);

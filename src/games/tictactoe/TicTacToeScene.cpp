@@ -57,6 +57,9 @@ TicTacToeScene::TicTacToeScene(SceneManager& manager, Difficulty difficulty)
 }
 
 bool TicTacToeScene::handleBackButton(const PointerEvent& event) {
+    if (event.phase == PointerEvent::Phase::Move) {
+        return false;
+    }
     const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
                                 kBackRadius * 2.0F, kBackRadius * 2.0F);
     if (event.phase == PointerEvent::Phase::Down) {

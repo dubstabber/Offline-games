@@ -14,6 +14,9 @@ void Button::setColors(Color fill, Color text) {
 }
 
 bool Button::handleInput(const PointerEvent& event) {
+    if (event.phase == PointerEvent::Phase::Move) {
+        return false; // a button only cares about press and release, not drags
+    }
     const bool inside = hitTest(event, x_, y_, w_, h_);
     if (event.phase == PointerEvent::Phase::Down) {
         pressed_ = inside;

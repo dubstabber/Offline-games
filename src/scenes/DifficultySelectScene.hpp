@@ -13,8 +13,9 @@ namespace og {
 class SceneManager;
 
 // The screen shown after picking a game from the menu: the game's title and
-// description, a difficulty face + label, a tap-to-set slider (Easy/Medium/
-// Hard), and a PLAY button that launches the game at the chosen difficulty.
+// description, a difficulty face + label, a slider you can tap or drag along
+// (Easy/Medium/Hard), and a PLAY button that launches the game at the chosen
+// difficulty.
 class DifficultySelectScene : public Scene {
 public:
     DifficultySelectScene(SceneManager& manager, GameInfo info);
@@ -25,6 +26,8 @@ public:
 
 private:
     bool handleBackButton(const PointerEvent& event);
+    bool handleSlider(const PointerEvent& event);
+    void dragKnobTo(float x); // move the knob and snap difficulty to the nearest stop
     void setDifficulty(Difficulty difficulty);
 
     SceneManager& manager_;
@@ -33,6 +36,8 @@ private:
     std::string titleUpper_;
     std::vector<std::string> descLines_; // wrapped lazily on first render
     bool backPressed_ = false;
+    bool draggingKnob_ = false;
+    float knobX_ = 0.0F; // live knob centre while dragging; else the difficulty's stop
     Button playButton_;
 };
 

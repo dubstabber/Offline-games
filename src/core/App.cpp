@@ -80,6 +80,16 @@ void App::dispatchPointer(const SDL_Event& converted) {
         pointer.x = converted.tfinger.x;
         pointer.y = converted.tfinger.y;
         break;
+    case SDL_EVENT_MOUSE_MOTION:
+        pointer.phase = PointerEvent::Phase::Move;
+        pointer.x = converted.motion.x;
+        pointer.y = converted.motion.y;
+        break;
+    case SDL_EVENT_FINGER_MOTION:
+        pointer.phase = PointerEvent::Phase::Move;
+        pointer.x = converted.tfinger.x;
+        pointer.y = converted.tfinger.y;
+        break;
     default:
         return;
     }

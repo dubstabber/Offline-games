@@ -41,6 +41,9 @@ MenuScene::MenuScene(SceneManager& manager) : manager_(manager) {
 }
 
 void MenuScene::handleInput(const PointerEvent& event) {
+    if (event.phase == PointerEvent::Phase::Move) {
+        return; // cards open on tap; nothing tracks a drag here
+    }
     if (event.phase == PointerEvent::Phase::Down) {
         pressedIndex_ = -1;
         for (std::size_t i = 0; i < cards_.size(); ++i) {

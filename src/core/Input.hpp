@@ -6,9 +6,10 @@ namespace og {
 
 // A pointer interaction expressed in logical canvas coordinates (see Layout).
 // Touch (finger) and mouse are unified into the same event by App before a
-// scene ever sees them, so games never branch on the input device.
+// scene ever sees them, so games never branch on the input device. A press is
+// a Down, then zero or more Moves while the finger/mouse drags, then an Up.
 struct PointerEvent {
-    enum class Phase : std::uint8_t { Down, Up };
+    enum class Phase : std::uint8_t { Down, Move, Up };
 
     Phase phase{};
     float x = 0.0F; // logical pixels
