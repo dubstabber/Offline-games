@@ -38,6 +38,8 @@ private:
     std::vector<Card> cards_;
     float scrollY_ = 0.0F;         // how far the grid is scrolled up, in logical pixels
     float maxScroll_ = 0.0F;       // upper bound for scrollY_ (computed from card count)
+    float velocityY_ = 0.0F;       // fling speed in px/s (sign matches scrollY_), 0 when idle
+    float dragAccumY_ = 0.0F;      // scrollY_ change applied by drags this frame, for velocity
     int pressedIndex_ = -1;        // card being pressed (for visual feedback), or -1
     bool gestureActive_ = false;   // a press that began in the scrollable area
     bool gestureScrolled_ = false; // the press moved far enough to be a scroll
