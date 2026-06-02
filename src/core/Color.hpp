@@ -34,6 +34,9 @@ constexpr Color cream = rgb(250, 235, 215);       // menu / difficulty backgroun
 constexpr Color easyGreen = rgb(76, 187, 122);    // difficulty: easy
 constexpr Color mediumOrange = rgb(240, 165, 80); // difficulty: medium
 constexpr Color hardRed = rgb(231, 76, 76);       // difficulty: hard
+constexpr Color menuPink = rgb(236, 122, 150);    // menu card accent / top-bar icon
+constexpr Color menuPurple = rgb(150, 120, 220);  // menu card accent
+constexpr Color menuYellow = rgb(240, 188, 70);   // menu card accent
 constexpr Color white = rgb(255, 255, 255);
 constexpr Color overlay = rgb(0, 0, 0, 150); // semi-transparent game-over layer
 } // namespace colors

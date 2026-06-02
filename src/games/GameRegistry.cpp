@@ -23,6 +23,30 @@ const std::vector<GameInfo>& gameRegistry() {
                 return std::make_unique<TicTacToeScene>(manager, difficulty);
             },
         });
+
+        // Placeholder cards for games not built yet: a title/emoji/accent so the
+        // menu has something to show and scroll, but no `create` factory, so the
+        // menu marks them "SOON" and they don't open. Implement one by giving it
+        // a scene + create (see "Adding a game") and dropping it from here.
+        const auto placeholder = [&list](const char* id, const char* title, const char* emoji,
+                                         Color accent) {
+            list.push_back(GameInfo{.id = id,
+                                    .title = title,
+                                    .emoji = emoji,
+                                    .description = "",
+                                    .accent = accent,
+                                    .create = nullptr});
+        };
+        placeholder("snake", "Snake", "\xF0\x9F\x90\x8D", colors::easyGreen);          // 🐍
+        placeholder("memory", "Memory", "\xF0\x9F\xA7\xA0", colors::botCyan);          // 🧠
+        placeholder("2048", "2048", "\xF0\x9F\x94\xA2", colors::mediumOrange);         // 🔢
+        placeholder("mines", "Mines", "\xF0\x9F\x92\xA3", colors::menuPink);           // 💣
+        placeholder("connect4", "Connect 4", "\xF0\x9F\x94\xB4", colors::menuPurple);  // 🔴
+        placeholder("solitaire", "Solitaire", "\xF0\x9F\x83\x8F", colors::menuYellow); // 🃏
+        placeholder("puzzle", "Puzzle", "\xF0\x9F\xA7\xA9", colors::easyGreen);        // 🧩
+        placeholder("dice", "Dice", "\xF0\x9F\x8E\xB2", colors::botCyan);              // 🎲
+        placeholder("pong", "Pong", "\xF0\x9F\x8F\x93", colors::hardRed);              // 🏓
+
         return list;
     }();
     return games;

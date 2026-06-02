@@ -9,8 +9,10 @@ namespace og {
 
 class SceneManager;
 
-// The home screen: a colorful 2-column grid of game cards built from
-// gameRegistry(). Tapping a card opens that game's difficulty screen.
+// The home screen: a fixed top bar (a placeholder menu button) above a
+// drag-scrollable 2-column grid of game cards built from gameRegistry().
+// Tapping a card opens that game's difficulty screen; placeholder cards (no
+// `create` factory) are marked "SOON" and ignore taps.
 class MenuScene : public Scene {
 public:
     explicit MenuScene(SceneManager& manager);
@@ -21,16 +23,26 @@ public:
 
 private:
     struct Card {
-        float x = 0.0F;
+        float x = 0.0F; // content-space top-left; subtract scrollY_ to draw/hit-test
         float y = 0.0F;
         float w = 0.0F;
         float h = 0.0F;
         GameInfo info;
     };
 
+    // Index of the card at the pointer's current screen position, or -1.
+    [[nodiscard]] int cardAt(const PointerEvent& event) const;
+    void openCard(const Card& card);
+
     SceneManager& manager_;
     std::vector<Card> cards_;
-    int pressedIndex_ = -1;
+    float scrollY_ = 0.0F;         // how far the grid is scrolled up, in logical pixels
+    float maxScroll_ = 0.0F;       // upper bound for scrollY_ (computed from card count)
+    int pressedIndex_ = -1;        // card being pressed (for visual feedback), or -1
+    bool gestureActive_ = false;   // a press that began in the scrollable area
+    bool gestureScrolled_ = false; // the press moved far enough to be a scroll
+    float pressStartY_ = 0.0F;     // pointer y at press, to tell taps from scrolls
+    float lastPointerY_ = 0.0F;    // pointer y of the previous move, for the delta
 };
 
 } // namespace og
