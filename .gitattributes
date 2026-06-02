@@ -1,0 +1,3 @@
+# Treat fonts as binary so no platform mangles them on checkout (CRLF, etc.).
+*.ttf binary
+*.ttc binary

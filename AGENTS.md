@@ -13,7 +13,8 @@ assets** — every visual is text, emoji, or a shape drawn from code. Built in
 
 ```sh
 # One-time deps (Alpine / postmarketOS):
-#   sudo apk add sdl3-dev sdl3_ttf-dev clang-extra-tools font-dejavu
+#   sudo apk add cmake samurai sdl3-dev sdl3_ttf-dev clang-extra-tools
+# Cross-platform (Fedora, Windows/MSYS2, …): see README.md → Build & run.
 cmake --preset dev            # or: debug / release
 cmake --build build/dev
 ./build/dev/offline-games     # run
@@ -21,7 +22,9 @@ ctest --test-dir build/dev    # unit tests (pure game logic)
 ```
 
 `release` is the optimized preset to deploy on the phone. `dev` is Debug with
-warnings-as-errors and is what CI/local checks should use.
+warnings-as-errors and is what CI/local checks should use. The codebase is
+cross-platform (Linux/Windows/macOS, GCC/Clang/MSVC); fonts are bundled in
+`assets/fonts/` so no system fonts are required.
 
 ## Architecture
 
@@ -40,7 +43,9 @@ src/
     Canvas            the ONLY thing that touches SDL_Renderer; draws shapes +
                       text/emoji. No images.
     FontManager       caches TTF fonts; attaches Noto Color Emoji as a fallback
-                      so one render call mixes text and color emoji
+                      so one render call mixes text and color emoji. Loads the
+                      bundled fonts (assets/fonts/, shipped next to the exe via
+                      SDL_GetBasePath) first, then falls back to system fonts
     Sdl.hpp           unique_ptr deleters for SDL/TTF handles (RAII everywhere)
     Layout.hpp        the fixed 720x1440 logical canvas (PinePhone-shaped)
     Color.hpp         shared named palette

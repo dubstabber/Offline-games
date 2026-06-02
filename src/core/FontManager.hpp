@@ -2,6 +2,7 @@
 
 #include "core/Sdl.hpp"
 
+#include <string>
 #include <vector>
 
 namespace og {
@@ -25,10 +26,10 @@ private:
         FontPtr emoji; // kept alive for as long as `text` references it
     };
 
-    [[nodiscard]] static FontPtr openFont(const char* path, float size);
+    [[nodiscard]] static FontPtr openFont(const std::string& path, float size);
 
-    const char* textFontPath_ = nullptr;
-    const char* emojiFontPath_ = nullptr;
+    std::string textFontPath_;
+    std::string emojiFontPath_;
     std::vector<Entry> cache_;
 };
 

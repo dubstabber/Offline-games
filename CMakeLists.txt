@@ -10,11 +10,23 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---- Warnings ----------------------------------------------------------------
-# Strict by default; the `dev` preset additionally turns these into errors.
+# Strict by default; the `dev` preset turns these into errors via
+# WARNINGS_AS_ERRORS. Flags are compiler-specific so MSVC builds still work.
+option(WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 add_library(project_warnings INTERFACE)
-target_compile_options(project_warnings INTERFACE
-    -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
-    -Wnon-virtual-dtor -Wold-style-cast -Woverloaded-virtual -Wnull-dereference)
+if(MSVC)
+    target_compile_options(project_warnings INTERFACE /W4 /permissive-)
+    if(WARNINGS_AS_ERRORS)
+        target_compile_options(project_warnings INTERFACE /WX)
+    endif()
+else()
+    target_compile_options(project_warnings INTERFACE
+        -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign-conversion
+        -Wnon-virtual-dtor -Wold-style-cast -Woverloaded-virtual -Wnull-dereference)
+    if(WARNINGS_AS_ERRORS)
+        target_compile_options(project_warnings INTERFACE -Werror)
+    endif()
+endif()
 
 # ---- Dependencies ------------------------------------------------------------
 find_package(SDL3 REQUIRED CONFIG)
@@ -42,6 +54,15 @@ target_link_libraries(engine
 # ---- Executable --------------------------------------------------------------
 add_executable(offline-games src/main.cpp)
 target_link_libraries(offline-games PRIVATE engine project_warnings)
+
+# Ship the fonts next to the executable so SDL_GetBasePath() finds them on every
+# OS without relying on system-installed fonts. FontManager falls back to system
+# locations if this bundle is missing.
+add_custom_command(TARGET offline-games POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/assets/fonts"
+            "$<TARGET_FILE_DIR:offline-games>/assets/fonts"
+    COMMENT "Bundling fonts next to the executable")
 
 # ---- Tests -------------------------------------------------------------------
 include(CTest)

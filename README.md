@@ -11,27 +11,42 @@ code, so the whole thing is tiny and resolution-independent. Written in
 |---|---|
 | Language | C++20 |
 | Graphics | SDL3 (`SDL_Renderer` primitives) + SDL3_ttf for text & color emoji |
-| Target | postmarketOS / Alpine, portrait touchscreen (720×1440) |
-| Assets | none — emoji & text only |
+| Target | postmarketOS phone + Linux/Windows desktop, portrait 720×1440 |
+| Assets | no images — text & emoji only (fonts bundled in `assets/fonts/`) |
 
 ## Build & run
 
-Install dependencies (Alpine / postmarketOS):
+The project is cross-platform: C++20 + SDL3 + SDL3_ttf, with the fonts bundled
+in `assets/fonts/` so it renders identically on the phone, on a Linux desktop,
+and on Windows without installing any fonts. Install the toolchain + SDL3 for
+your platform:
 
 ```sh
-sudo apk add sdl3-dev sdl3_ttf-dev clang-extra-tools font-dejavu
+# Alpine / postmarketOS
+sudo apk add cmake samurai sdl3-dev sdl3_ttf-dev clang-extra-tools
+
+# Fedora (40+)
+sudo dnf install cmake ninja-build gcc-c++ SDL3-devel SDL3_ttf-devel clang-tools-extra
+
+# Windows — MSYS2 UCRT64 shell (no MSVC needed)
+pacman -S mingw-w64-ucrt-x86_64-{toolchain,cmake,ninja,SDL3,SDL3_ttf}
 ```
 
-Then:
+Then, on any platform:
 
 ```sh
 cmake --preset dev          # presets: debug | release | dev
 cmake --build build/dev
-./build/dev/offline-games
+./build/dev/offline-games    # Windows: build/dev/offline-games.exe
 ```
 
 - **`release`** — optimized build to deploy on the phone.
-- **`dev`** — Debug with warnings-as-errors; use it while developing.
+- **`dev`** — Debug with warnings-as-errors (`WARNINGS_AS_ERRORS=ON`); use it
+  while developing. Warning flags are compiler-specific, so GCC, Clang and MSVC
+  all build cleanly.
+
+The build copies `assets/fonts/` next to the executable; `FontManager` loads
+those first and only falls back to system fonts if the bundle is missing.
 
 On the PinePhone under sxmo-de-sway, build the release preset and launch it on
 the next unused numeric workspace:
