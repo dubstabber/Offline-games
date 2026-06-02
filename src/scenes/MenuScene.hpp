@@ -1,7 +1,7 @@
 #pragma once
 
 #include "core/Scene.hpp"
-#include "ui/Button.hpp"
+#include "games/GameInfo.hpp"
 
 #include <vector>
 
@@ -9,8 +9,8 @@ namespace og {
 
 class SceneManager;
 
-// The home screen: a titled, vertical list of the games in gameRegistry().
-// Selecting an entry pushes that game's scene onto the stack.
+// The home screen: a colorful 2-column grid of game cards built from
+// gameRegistry(). Tapping a card opens that game's difficulty screen.
 class MenuScene : public Scene {
 public:
     explicit MenuScene(SceneManager& manager);
@@ -20,8 +20,17 @@ public:
     void render(Canvas& canvas) override;
 
 private:
+    struct Card {
+        float x = 0.0F;
+        float y = 0.0F;
+        float w = 0.0F;
+        float h = 0.0F;
+        GameInfo info;
+    };
+
     SceneManager& manager_;
-    std::vector<Button> entries_;
+    std::vector<Card> cards_;
+    int pressedIndex_ = -1;
 };
 
 } // namespace og

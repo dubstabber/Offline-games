@@ -11,6 +11,10 @@ void SceneManager::pop() {
     pending_ = Action::Pop;
 }
 
+void SceneManager::popToRoot() {
+    pending_ = Action::PopToRoot;
+}
+
 void SceneManager::replace(std::unique_ptr<Scene> scene) {
     pendingScene_ = std::move(scene);
     pending_ = Action::Replace;
@@ -28,6 +32,11 @@ void SceneManager::applyPending() {
     case Action::Pop:
         if (!scenes_.empty()) {
             scenes_.pop_back();
+        }
+        break;
+    case Action::PopToRoot:
+        if (scenes_.size() > 1) {
+            scenes_.erase(scenes_.begin() + 1, scenes_.end());
         }
         break;
     case Action::Replace:

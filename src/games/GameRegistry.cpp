@@ -15,8 +15,12 @@ const std::vector<GameInfo>& gameRegistry() {
             .id = "tictactoe",
             .title = "Tic-Tac-Toe",
             .emoji = "\xE2\x9D\x8C", // ❌
-            .create = [](SceneManager& manager) -> std::unique_ptr<Scene> {
-                return std::make_unique<TicTacToeScene>(manager);
+            .description = "Get three of your marks in a row \xE2\x80\x94 across, down, or "
+                           "diagonally \xE2\x80\x94 before the bot does. Tap an empty square to "
+                           "place your mark.",
+            .accent = colors::youRed,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<TicTacToeScene>(manager, difficulty);
             },
         });
         return list;

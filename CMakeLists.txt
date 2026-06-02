@@ -30,7 +30,9 @@ add_library(engine STATIC
     src/ui/Label.cpp
     src/games/GameRegistry.cpp
     src/games/tictactoe/TicTacToeBoard.cpp
+    src/games/tictactoe/TicTacToeBot.cpp
     src/games/tictactoe/TicTacToeScene.cpp
+    src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp)
 target_include_directories(engine PUBLIC src)
 target_link_libraries(engine

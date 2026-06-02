@@ -5,52 +5,86 @@
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
 
+#include <random>
+#include <string>
+
 namespace og {
 namespace {
 
-// Board geometry in logical canvas pixels.
-constexpr float kGridSize = 600.0F;
+using Cell = TicTacToeBoard::Cell;
+
+// ---- Back button (circular, top-left) -----------------------------------
+constexpr float kBackCx = 92.0F;
+constexpr float kBackCy = 100.0F;
+constexpr float kBackRadius = 56.0F;
+constexpr Color kChevron = rgb(176, 124, 162); // mauve, like the screenshot
+
+// ---- Scoreboard panel ----------------------------------------------------
+constexpr float kPanelW = 420.0F;
+constexpr float kPanelH = 92.0F;
+constexpr float kPanelX = (layout::kWidthF - kPanelW) / 2.0F;
+constexpr float kPanelY = 64.0F;
+
+// ---- Board: a `#` of four thick lines, no enclosing panel ---------------
+constexpr float kGridSize = 480.0F;
 constexpr float kGridX = (layout::kWidthF - kGridSize) / 2.0F;
-constexpr float kGridY = 440.0F;
+constexpr float kGridY = 520.0F;
 constexpr float kCell = kGridSize / 3.0F;
+constexpr float kGridThickness = 16.0F;
+constexpr float kGridOvershoot = 30.0F; // lines extend past the intersections
 
-// UTF-8 for the player marks. Kept here so the logic class stays free of any
-// presentation detail.
-constexpr const char* kMarkX = "\xE2\x9D\x8C"; // ❌
-constexpr const char* kMarkO = "\xE2\xAD\x95"; // ⭕
+// ---- Game-over overlay buttons ------------------------------------------
+constexpr float kButtonRowY = 760.0F;
+constexpr float kHomeSize = 140.0F;
+constexpr float kPlayAgainW = 360.0F;
+constexpr float kButtonGap = 24.0F;
+constexpr float kRowWidth = kHomeSize + kButtonGap + kPlayAgainW;
+constexpr float kRowX = (layout::kWidthF - kRowWidth) / 2.0F;
 
-const char* markGlyph(TicTacToeBoard::Cell cell) {
-    switch (cell) {
-    case TicTacToeBoard::Cell::X:
-        return kMarkX;
-    case TicTacToeBoard::Cell::O:
-        return kMarkO;
-    case TicTacToeBoard::Cell::Empty:
-        return "";
-    }
-    return "";
-}
+constexpr float kBotThinkSeconds = 0.45F;
 
 } // namespace
 
-TicTacToeScene::TicTacToeScene(SceneManager& manager)
-    : manager_(manager), backButton_("\xE2\x86\x90 Back", 40.0F, 48.0F, 220.0F, 96.0F),
-      newGameButton_("New Game", (layout::kWidthF - 400.0F) / 2.0F, 1180.0F, 400.0F, 120.0F) {
-    backButton_.setColors(colors::surface, colors::text);
-    backButton_.setOnTap([this] { manager_.pop(); });
-    newGameButton_.setColors(colors::surfaceAlt, colors::text);
-    newGameButton_.setOnTap([this] { board_.reset(); });
+TicTacToeScene::TicTacToeScene(SceneManager& manager, Difficulty difficulty)
+    : manager_(manager), bot_(std::random_device{}()), difficulty_(difficulty),
+      homeButton_("\xF0\x9F\x8F\xA0", kRowX, kButtonRowY, kHomeSize, kHomeSize), // 🏠
+      playAgainButton_("PLAY AGAIN", kRowX + kHomeSize + kButtonGap, kButtonRowY, kPlayAgainW,
+                       kHomeSize) {
+    homeButton_.setColors(colors::white, colors::panelBrown);
+    homeButton_.setOnTap([this] { manager_.popToRoot(); });
+    playAgainButton_.setColors(colors::youRed, colors::white);
+    playAgainButton_.setOnTap([this] { beginRound(); });
+}
+
+bool TicTacToeScene::handleBackButton(const PointerEvent& event) {
+    const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
+                                kBackRadius * 2.0F, kBackRadius * 2.0F);
+    if (event.phase == PointerEvent::Phase::Down) {
+        backPressed_ = inside;
+        return inside;
+    }
+    const bool wasPressed = backPressed_;
+    backPressed_ = false;
+    if (wasPressed && inside) {
+        manager_.pop();
+        return true;
+    }
+    return false;
 }
 
 void TicTacToeScene::handleInput(const PointerEvent& event) {
-    if (backButton_.handleInput(event)) {
+    if (handleBackButton(event)) {
         return;
     }
-    if (newGameButton_.handleInput(event)) {
+    if (phase_ == Phase::GameOver) {
+        if (homeButton_.handleInput(event)) {
+            return;
+        }
+        playAgainButton_.handleInput(event);
         return;
     }
-    // A tap (press) inside the grid places a mark for the current player.
-    if (event.phase != PointerEvent::Phase::Down || board_.isOver()) {
+    // While the bot is "thinking" the board is locked.
+    if (phase_ != Phase::PlayerTurn || event.phase != PointerEvent::Phase::Down) {
         return;
     }
     if (!hitTest(event, kGridX, kGridY, kGridSize, kGridSize)) {
@@ -58,43 +92,109 @@ void TicTacToeScene::handleInput(const PointerEvent& event) {
     }
     const auto col = static_cast<std::size_t>((event.x - kGridX) / kCell);
     const auto row = static_cast<std::size_t>((event.y - kGridY) / kCell);
-    board_.place((row * 3) + col);
+    const std::size_t index = (row * 3) + col;
+    if (board_.at(index) != Cell::Empty) {
+        return;
+    }
+    board_.place(index);
+    if (board_.isOver()) {
+        enterGameOver();
+    } else {
+        phase_ = Phase::BotThinking;
+        botTimer_ = kBotThinkSeconds;
+    }
 }
 
-void TicTacToeScene::update(float /*dtSeconds*/) {}
+void TicTacToeScene::update(float dtSeconds) {
+    if (phase_ != Phase::BotThinking) {
+        return;
+    }
+    botTimer_ -= dtSeconds;
+    if (botTimer_ > 0.0F) {
+        return;
+    }
+    board_.place(bot_.chooseMove(board_, difficulty_));
+    if (board_.isOver()) {
+        enterGameOver();
+    } else {
+        phase_ = Phase::PlayerTurn;
+    }
+}
 
-std::string TicTacToeScene::statusText() const {
+void TicTacToeScene::beginRound() {
+    board_.reset();
+    botTimer_ = 0.0F;
+    phase_ = Phase::PlayerTurn;
+}
+
+void TicTacToeScene::enterGameOver() {
     if (const auto winner = board_.winner()) {
-        return std::string(markGlyph(*winner)) + " wins!";
+        if (*winner == Cell::X) {
+            ++youScore_;
+        } else {
+            ++botScore_;
+        }
     }
-    if (board_.isDraw()) {
-        return "It's a draw \xF0\x9F\xA4\x9D"; // 🤝
-    }
-    return std::string("Turn: ") + markGlyph(board_.currentPlayer());
+    phase_ = Phase::GameOver;
 }
 
-void TicTacToeScene::render(Canvas& canvas) {
-    canvas.text("Tic-Tac-Toe", layout::kWidthF / 2.0F, 180.0F, 64.0F, colors::text,
-                Canvas::Align::Center);
-    canvas.textCentered(statusText(), layout::kWidthF / 2.0F, 340.0F, 52.0F, colors::accent);
+std::string TicTacToeScene::resultText() const {
+    if (const auto winner = board_.winner()) {
+        return *winner == Cell::X ? "YOU WIN!" : "YOU LOST!";
+    }
+    return "DRAW!";
+}
 
-    // Board background panel.
-    canvas.fillRoundedRect(kGridX - 16.0F, kGridY - 16.0F, kGridSize + 32.0F, kGridSize + 32.0F,
-                           28.0F, colors::surface);
+void TicTacToeScene::drawBackButton(Canvas& canvas) {
+    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, colors::white);
+    // A `<` chevron from two lines.
+    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, kChevron);
+    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, kChevron);
+}
 
-    // Grid lines.
+void TicTacToeScene::drawScoreboard(Canvas& canvas) const {
+    // Difficulty tab, tucked behind the panel with its label peeking out above.
+    // Drawn before the panel so its lower edge slips under the panel's top.
+    constexpr float tabW = 176.0F;
+    constexpr float tabH = 52.0F;
+    const float tabX = (layout::kWidthF - tabW) / 2.0F;
+    const float tabY = kPanelY - 34.0F;
+    canvas.fillRoundedRect(tabX, tabY, tabW, tabH, 16.0F, rgb(92, 68, 68));
+    // Label sits above the panel's top edge so the panel doesn't cover it.
+    canvas.textCentered(label(difficulty_), layout::kWidthF / 2.0F, kPanelY - 14.0F, 24.0F,
+                        colors::text);
+
+    canvas.fillRoundedRect(kPanelX, kPanelY, kPanelW, kPanelH, 22.0F, colors::panelBrown);
+
+    const float youCx = kPanelX + 84.0F;
+    const float botCx = kPanelX + kPanelW - 84.0F;
+    const float labelCy = kPanelY + 28.0F;
+    const float scoreCy = kPanelY + 64.0F;
+
+    canvas.textCentered("YOU", youCx, labelCy, 26.0F, colors::youRed);
+    canvas.textCentered(std::to_string(youScore_), youCx, scoreCy, 40.0F, colors::youRed);
+    canvas.textCentered("VS", layout::kWidthF / 2.0F, kPanelY + (kPanelH / 2.0F) + 2.0F, 44.0F,
+                        colors::white);
+    canvas.textCentered("BOT", botCx, labelCy, 26.0F, colors::botCyan);
+    canvas.textCentered(std::to_string(botScore_), botCx, scoreCy, 40.0F, colors::botCyan);
+}
+
+void TicTacToeScene::drawGrid(Canvas& canvas) {
     for (int i = 1; i < 3; ++i) {
         const float offset = static_cast<float>(i) * kCell;
-        canvas.line(kGridX + offset, kGridY, kGridX + offset, kGridY + kGridSize, 8.0F,
-                    colors::line);
-        canvas.line(kGridX, kGridY + offset, kGridX + kGridSize, kGridY + offset, 8.0F,
-                    colors::line);
+        // Vertical line (overshoots top and bottom).
+        canvas.line(kGridX + offset, kGridY - kGridOvershoot, kGridX + offset,
+                    kGridY + kGridSize + kGridOvershoot, kGridThickness, colors::gridBlack);
+        // Horizontal line (overshoots left and right).
+        canvas.line(kGridX - kGridOvershoot, kGridY + offset, kGridX + kGridSize + kGridOvershoot,
+                    kGridY + offset, kGridThickness, colors::gridBlack);
     }
+}
 
-    // Marks.
+void TicTacToeScene::drawMarks(Canvas& canvas) const {
     for (std::size_t index = 0; index < TicTacToeBoard::kSize; ++index) {
-        const char* glyph = markGlyph(board_.at(index));
-        if (*glyph == '\0') {
+        const Cell cell = board_.at(index);
+        if (cell == Cell::Empty) {
             continue;
         }
         const std::size_t colIndex = index % 3;
@@ -103,11 +203,34 @@ void TicTacToeScene::render(Canvas& canvas) {
         const auto row = static_cast<float>(rowIndex);
         const float cx = kGridX + ((col + 0.5F) * kCell);
         const float cy = kGridY + ((row + 0.5F) * kCell);
-        canvas.textCentered(glyph, cx, cy, kCell * 0.62F, colors::text);
+        if (cell == Cell::X) {
+            constexpr float arm = kCell * 0.30F;
+            canvas.line(cx - arm, cy - arm, cx + arm, cy + arm, 18.0F, colors::youRed);
+            canvas.line(cx - arm, cy + arm, cx + arm, cy - arm, 18.0F, colors::youRed);
+        } else {
+            constexpr float outer = kCell * 0.34F;
+            canvas.fillCircle(cx, cy, outer, colors::botCyan);
+            canvas.fillCircle(cx, cy, outer - 18.0F, colors::coral);
+        }
     }
+}
 
-    backButton_.render(canvas);
-    newGameButton_.render(canvas);
+void TicTacToeScene::drawOverlay(Canvas& canvas) const {
+    canvas.fillRect(0.0F, 0.0F, layout::kWidthF, layout::kHeightF, colors::overlay);
+    canvas.textCentered(resultText(), layout::kWidthF / 2.0F, 560.0F, 96.0F, colors::white);
+    homeButton_.render(canvas);
+    playAgainButton_.render(canvas);
+}
+
+void TicTacToeScene::render(Canvas& canvas) {
+    canvas.clear(colors::coral);
+    drawBackButton(canvas);
+    drawScoreboard(canvas);
+    drawGrid(canvas);
+    drawMarks(canvas);
+    if (phase_ == Phase::GameOver) {
+        drawOverlay(canvas);
+    }
 }
 
 } // namespace og

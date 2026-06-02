@@ -16,6 +16,9 @@ class SceneManager {
 public:
     void push(std::unique_ptr<Scene> scene);
     void pop();
+    // Pop every scene except the bottom one (the menu). Used by the in-game
+    // "Home" button, which must skip past the difficulty screen in one step.
+    void popToRoot();
     void replace(std::unique_ptr<Scene> scene);
 
     [[nodiscard]] Scene* current() const;
@@ -25,7 +28,7 @@ public:
     void applyPending();
 
 private:
-    enum class Action : std::uint8_t { None, Push, Pop, Replace };
+    enum class Action : std::uint8_t { None, Push, Pop, PopToRoot, Replace };
 
     std::vector<std::unique_ptr<Scene>> scenes_;
     std::unique_ptr<Scene> pendingScene_;

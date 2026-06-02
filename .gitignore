@@ -12,3 +12,5 @@ compile_commands.json
 # Claude Code transient state (keep .claude/skills/, ignore runtime locks)
 .claude/scheduled_tasks.lock
 .claude/*.lock
+
+demo-ss/
