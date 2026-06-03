@@ -44,6 +44,8 @@ add_library(engine STATIC
     src/games/tictactoe/TicTacToeBoard.cpp
     src/games/tictactoe/TicTacToeBot.cpp
     src/games/tictactoe/TicTacToeScene.cpp
+    src/games/tapmatch/TapMatchBoard.cpp
+    src/games/tapmatch/TapMatchScene.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp)
 target_include_directories(engine PUBLIC src)

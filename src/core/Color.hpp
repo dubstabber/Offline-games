@@ -37,6 +37,16 @@ constexpr Color hardRed = rgb(231, 76, 76);       // difficulty: hard
 constexpr Color menuPink = rgb(236, 122, 150);    // menu card accent / top-bar icon
 constexpr Color menuPurple = rgb(150, 120, 220);  // menu card accent
 constexpr Color menuYellow = rgb(240, 188, 70);   // menu card accent
+
+// Tap Match: maroon field, grey fruit tiles (bright when free, dim when covered),
+// and a dark holder bar with recessed slots.
+constexpr Color tapMatchMaroon = rgb(122, 48, 66);      // background
+constexpr Color tapMatchTileLight = rgb(238, 232, 228); // accessible (free) tile card
+constexpr Color tapMatchTileDim = rgb(176, 170, 168);   // covered tile card
+constexpr Color tapMatchTileEdge = rgb(150, 132, 130);  // tile border for separation
+constexpr Color tapMatchHolder = rgb(96, 38, 52);       // holder bar panel
+constexpr Color tapMatchSlot = rgb(78, 30, 44);         // recessed holder slot
+
 constexpr Color white = rgb(255, 255, 255);
 constexpr Color overlay = rgb(0, 0, 0, 150); // semi-transparent game-over layer
 } // namespace colors

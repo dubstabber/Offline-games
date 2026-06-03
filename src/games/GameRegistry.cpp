@@ -1,5 +1,6 @@
 #include "games/GameRegistry.hpp"
 
+#include "games/tapmatch/TapMatchScene.hpp"
 #include "games/tictactoe/TicTacToeScene.hpp"
 
 #include <memory>
@@ -21,6 +22,17 @@ const std::vector<GameInfo>& gameRegistry() {
             .accent = colors::youRed,
             .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
                 return std::make_unique<TicTacToeScene>(manager, difficulty);
+            },
+        });
+        list.push_back(GameInfo{
+            .id = "tapmatch",
+            .title = "Tap Match",
+            .emoji = "\xF0\x9F\x8D\x89", // 🍉
+            .description = "Tap to collect cards. Complete sets of 3 to clear cards. You can hold "
+                           "up to 7 cards in your stack, so collect strategically.",
+            .accent = colors::menuPink,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<TapMatchScene>(manager, difficulty);
             },
         });
 
