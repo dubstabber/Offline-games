@@ -19,23 +19,25 @@ constexpr float kBackCy = 100.0F;
 constexpr float kBackRadius = 56.0F;
 constexpr Color kChevron = rgb(176, 124, 162);
 
-// ---- Board: a fixed fine grid mapped to pixels -----------------------------
-constexpr float kFineCell = 64.0F;       // one fine grid cell
-constexpr float kTilePx = kFineCell * 2; // a tile footprint is 2x2 cells
-constexpr float kBoardX = 72.0F;         // (720 - 9*64) / 2
-constexpr float kBoardY = 230.0F;
-constexpr float kEmojiPx = 78.0F;
+// ---- Board: a fixed fine grid mapped to pixels (16x22 cells) ----------------
+constexpr float kFineCell = 38.0F;       // one fine grid cell
+constexpr float kTilePx = kFineCell * 2; // a tile footprint is 2x2 cells (76px)
+constexpr float kBoardX = 56.0F;         // (720 - 16*38) / 2
+constexpr float kBoardY = 200.0F;
+constexpr float kTileInset = 5.0F; // gap between a tile's cell and its card
+constexpr float kTileRadius = 16.0F;
+constexpr float kEmojiPx = 46.0F; // fruit size on a ~66px card (leaves a grey margin)
 
-// ---- Holder bar (7 slots, bottom) ------------------------------------------
+// ---- Holder bar (7 slots, near the bottom) ---------------------------------
 constexpr float kHolderX = 40.0F;
-constexpr float kHolderY = 1238.0F;
+constexpr float kHolderY = 1150.0F;
 constexpr float kHolderW = 640.0F;
-constexpr float kHolderH = 132.0F;
+constexpr float kHolderH = 124.0F;
 constexpr float kHolderRadius = 28.0F;
 constexpr float kSlotPad = 18.0F;
 constexpr float kSlotGap = 10.0F;
-constexpr float kSlotH = 96.0F;
-constexpr float kHolderEmoji = 62.0F;
+constexpr float kSlotH = 90.0F;
+constexpr float kHolderEmoji = 58.0F;
 
 // ---- Game-over overlay buttons — same layout as Tic-Tac-Toe ----------------
 constexpr float kButtonRowY = 760.0F;
@@ -52,29 +54,33 @@ constexpr float kRowX = (layout::kWidthF - kRowWidth) / 2.0F;
                 .layers = 2,
                 .tileCount = 18,
                 .holderBudget = 5,
-                .gridWidth = 9,
-                .gridHeight = 11};
+                .gridWidth = 16,
+                .gridHeight = 22,
+                .clusters = 2};
     case Difficulty::Medium:
         return {.iconVariety = 6,
-                .layers = 3,
+                .layers = 2,
                 .tileCount = 36,
                 .holderBudget = 6,
-                .gridWidth = 9,
-                .gridHeight = 11};
+                .gridWidth = 16,
+                .gridHeight = 22,
+                .clusters = 4};
     case Difficulty::Hard:
         return {.iconVariety = 8,
-                .layers = 4,
+                .layers = 3,
                 .tileCount = 54,
                 .holderBudget = 7,
-                .gridWidth = 9,
-                .gridHeight = 11};
+                .gridWidth = 16,
+                .gridHeight = 22,
+                .clusters = 4};
     }
     return {.iconVariety = 6,
-            .layers = 3,
+            .layers = 2,
             .tileCount = 36,
             .holderBudget = 6,
-            .gridWidth = 9,
-            .gridHeight = 11};
+            .gridWidth = 16,
+            .gridHeight = 22,
+            .clusters = 4};
 }
 
 // Icon index -> a fruit emoji (UTF-8 bytes). A board uses the first `iconVariety`
@@ -225,12 +231,15 @@ void TapMatchScene::drawBoard(Canvas& canvas) const {
         const float x = kBoardX + (static_cast<float>(tile.x) * kFineCell);
         const float y = kBoardY + (static_cast<float>(tile.y) * kFineCell);
         const bool accessible = board_.isAccessible(tile.id);
-        canvas.fillRoundedRect(x + 4.0F, y + 4.0F, kTilePx - 8.0F, kTilePx - 8.0F, 24.0F,
-                               colors::tapMatchTileEdge);
-        canvas.fillRoundedRect(x + 6.0F, y + 6.0F, kTilePx - 12.0F, kTilePx - 12.0F, 22.0F,
+        const float cardW = kTilePx - (2.0F * kTileInset);
+        // A grey border (slightly larger) separates overlapping tiles, then the
+        // card itself (white & raised when free, grey when covered).
+        canvas.fillRoundedRect(x + kTileInset - 2.0F, y + kTileInset - 2.0F, cardW + 4.0F,
+                               cardW + 4.0F, kTileRadius + 2.0F, colors::tapMatchTileEdge);
+        canvas.fillRoundedRect(x + kTileInset, y + kTileInset, cardW, cardW, kTileRadius,
                                accessible ? colors::tapMatchTileLight : colors::tapMatchTileDim);
-        canvas.textCentered(emojiFor(tile.icon), x + (kTilePx / 2.0F), y + (kTilePx / 2.0F),
-                            kEmojiPx, colors::white);
+        canvas.emojiCentered(emojiFor(tile.icon), x + (kTilePx / 2.0F), y + (kTilePx / 2.0F),
+                             kEmojiPx);
     }
 }
 
@@ -247,8 +256,8 @@ void TapMatchScene::drawHolder(Canvas& canvas) const {
     for (std::size_t i = 0;
          i < held.size() && i < static_cast<std::size_t>(TapMatchBoard::kHolderCapacity); ++i) {
         const float sx = kHolderX + kSlotPad + (static_cast<float>(i) * (slotW + kSlotGap));
-        canvas.textCentered(emojiFor(held.at(i)), sx + (slotW / 2.0F), slotY + (kSlotH / 2.0F),
-                            kHolderEmoji, colors::white);
+        canvas.emojiCentered(emojiFor(held.at(i)), sx + (slotW / 2.0F), slotY + (kSlotH / 2.0F),
+                             kHolderEmoji);
     }
 }
 

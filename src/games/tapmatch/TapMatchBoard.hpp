@@ -52,6 +52,7 @@ public:
         int holderBudget = 7;
         int gridWidth = 9;
         int gridHeight = 11;
+        int clusters = 1; // separate tile piles spread across the board (1..4)
     };
 
     TapMatchBoard(const GenParams& params, std::uint64_t seed);
@@ -89,6 +90,9 @@ private:
     }
 
     void placeTiles(std::mt19937_64& rng);
+    // Tiles per (cluster, layer): split tileCount across clusters, then each
+    // cluster's share across layers by a lower-heavy pyramid weight.
+    [[nodiscard]] std::vector<std::vector<int>> clusterLayerCounts(int clusters, int layers) const;
     void buildCoverGraph();
     void computeRemovalOrder(std::mt19937_64& rng);
     void assignIcons(std::mt19937_64& rng);

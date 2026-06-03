@@ -38,12 +38,12 @@ constexpr Color menuPink = rgb(236, 122, 150);    // menu card accent / top-bar 
 constexpr Color menuPurple = rgb(150, 120, 220);  // menu card accent
 constexpr Color menuYellow = rgb(240, 188, 70);   // menu card accent
 
-// Tap Match: maroon field, grey fruit tiles (bright when free, dim when covered),
-// and a dark holder bar with recessed slots.
+// Tap Match: maroon field, grey fruit tiles (white/raised when free, grey when
+// covered), and a dark holder bar with recessed slots.
 constexpr Color tapMatchMaroon = rgb(122, 48, 66);      // background
-constexpr Color tapMatchTileLight = rgb(238, 232, 228); // accessible (free) tile card
-constexpr Color tapMatchTileDim = rgb(176, 170, 168);   // covered tile card
-constexpr Color tapMatchTileEdge = rgb(150, 132, 130);  // tile border for separation
+constexpr Color tapMatchTileLight = rgb(246, 245, 249); // accessible (free) tile card
+constexpr Color tapMatchTileDim = rgb(197, 194, 203);   // covered tile card
+constexpr Color tapMatchTileEdge = rgb(158, 150, 162);  // tile border/separation
 constexpr Color tapMatchHolder = rgb(96, 38, 52);       // holder bar panel
 constexpr Color tapMatchSlot = rgb(78, 30, 44);         // recessed holder slot
 

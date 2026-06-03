@@ -45,6 +45,12 @@ public:
     // Convenience: center a single line on (cx, cy).
     void textCentered(std::string_view str, float cx, float cy, float pixelSize, Color color);
 
+    // Draw a glyph (typically a color emoji) centered on (cx, cy) and scaled to
+    // fit a `size`-tall box. Color-emoji fonts rasterize at a fixed bitmap strike
+    // that ignores the requested point size, so this scales the rendered texture
+    // to the size you actually want.
+    void emojiCentered(std::string_view str, float cx, float cy, float size);
+
     Size measure(std::string_view str, float pixelSize);
 
 private:

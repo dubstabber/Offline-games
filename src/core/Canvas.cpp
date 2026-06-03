@@ -165,6 +165,24 @@ void Canvas::textCentered(std::string_view str, float cx, float cy, float pixelS
     text(str, cx, cy - (size.h / 2.0F), pixelSize, color, Align::Center);
 }
 
+void Canvas::emojiCentered(std::string_view str, float cx, float cy, float size) {
+    if (str.empty() || size <= 0.0F) {
+        return;
+    }
+    // Rasterize once at a fixed, high-ish size (the emoji strike is fixed anyway),
+    // then scale the texture down to the requested size.
+    constexpr float kRasterSize = 72.0F;
+    const CachedText* cached = rasterize(str, kRasterSize, colors::white);
+    if (cached == nullptr || cached->w <= 0.0F || cached->h <= 0.0F) {
+        return;
+    }
+    const float scale = size / std::max(cached->w, cached->h);
+    const float w = cached->w * scale;
+    const float h = cached->h * scale;
+    const SDL_FRect dst{.x = cx - (w / 2.0F), .y = cy - (h / 2.0F), .w = w, .h = h};
+    SDL_RenderTexture(renderer_, cached->texture.get(), nullptr, &dst);
+}
+
 Canvas::Size Canvas::measure(std::string_view str, float pixelSize) {
     const CachedText* cached = rasterize(str, pixelSize, colors::text);
     if (cached == nullptr) {

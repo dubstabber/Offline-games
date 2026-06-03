@@ -11,6 +11,51 @@ namespace {
     return std::max(lo, std::min(value, hi));
 }
 
+// A footprint origin on the per-layer step-2 lattice.
+struct GridPoint {
+    int x = 0;
+    int y = 0;
+};
+
+// All lattice origins for a layer (parity ox/oy). Two tiles on this lattice
+// never overlap, so a whole layer is overlap-free regardless of clustering.
+[[nodiscard]] std::vector<GridPoint> latticePoints(int ox, int oy, int maxOx, int maxOy) {
+    std::vector<GridPoint> points;
+    for (int x = ox; x <= maxOx; x += TapMatchBoard::kTileSpan) {
+        for (int y = oy; y <= maxOy; y += TapMatchBoard::kTileSpan) {
+            points.push_back(GridPoint{.x = x, .y = y});
+        }
+    }
+    return points;
+}
+
+// The `need` unused points closest to (cx, cy), random among equal distances —
+// so a cluster grows as a compact pile around its centre.
+[[nodiscard]] std::vector<std::size_t> nearestUnusedIndices(const std::vector<GridPoint>& points,
+                                                            const std::vector<char>& used,
+                                                            double cx, double cy, int need,
+                                                            std::mt19937_64& rng) {
+    std::vector<std::size_t> idx;
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        if (used.at(i) == 0) {
+            idx.push_back(i);
+        }
+    }
+    auto dist2 = [&](std::size_t i) {
+        const double dx = static_cast<double>(points.at(i).x) - cx;
+        const double dy = static_cast<double>(points.at(i).y) - cy;
+        return (dx * dx) + (dy * dy);
+    };
+    std::ranges::shuffle(idx, rng);
+    std::ranges::stable_sort(idx,
+                             [&](std::size_t a, std::size_t b) { return dist2(a) < dist2(b); });
+    const auto keep = static_cast<std::size_t>(std::max(0, need));
+    if (idx.size() > keep) {
+        idx.resize(keep);
+    }
+    return idx;
+}
+
 // Icons bucketed by their partial count in the generator's virtual holder, plus
 // the closing cost (extra tiles still needed to finish every open group).
 struct IconBuckets {
@@ -86,6 +131,7 @@ TapMatchBoard::TapMatchBoard(const GenParams& params, std::uint64_t seed) : para
     params_.gridHeight = std::max(kTileSpan + 1, params_.gridHeight);
     params_.holderBudget = clampInt(params_.holderBudget, kGroupSize, kHolderCapacity);
     params_.tileCount = std::max(kGroupSize, params_.tileCount);
+    params_.clusters = clampInt(params_.clusters, 1, 4);
 
     std::mt19937_64 rng(seed);
     placeTiles(rng);          // geometry: layered, overlapping footprints
@@ -105,78 +151,84 @@ bool TapMatchBoard::footprintsOverlap(const Tile& a, const Tile& b) {
            b.y < a.y + kTileSpan;
 }
 
-void TapMatchBoard::placeTiles(std::mt19937_64& rng) {
-    const int layers = params_.layers;
-    const int maxOx = params_.gridWidth - kTileSpan;  // inclusive max footprint origin x
-    const int maxOy = params_.gridHeight - kTileSpan; // inclusive max footprint origin y
-    const double cx = static_cast<double>(maxOx) / 2.0;
-    const double cy = static_cast<double>(maxOy) / 2.0;
-
-    struct Candidate {
-        int x = 0;
-        int y = 0;
-        double dist = 0.0;
-    };
-
-    // Per-layer footprint candidates on a step-2 lattice (so footprints on one
-    // layer never overlap — the invariant that makes a peel order always exist),
-    // closest-to-centre first for a compact pile. Alternating offsets shift
-    // consecutive layers so higher ones interleave with and cover lower ones.
-    std::vector<std::vector<Candidate>> layerCands(static_cast<std::size_t>(layers));
+std::vector<std::vector<int>> TapMatchBoard::clusterLayerCounts(int clusters, int layers) const {
+    // Very base-heavy pyramid (weight = (layers - l)^2): a wide bottom layer with
+    // only a couple of raised tiles on top, so a cluster reads as a tidy grid of
+    // distinct tiles (with a few covering it) rather than a dense ball.
     long long weightSum = 0;
     for (int l = 0; l < layers; ++l) {
-        weightSum += (2 * layers) - l;
-        const int ox = l % 2;
-        const int oy = (l / 2) % 2;
-        std::vector<Candidate>& cands = layerCands.at(static_cast<std::size_t>(l));
-        for (int x = ox; x <= maxOx; x += kTileSpan) {
-            for (int y = oy; y <= maxOy; y += kTileSpan) {
-                const double dx = static_cast<double>(x) - cx;
-                const double dy = static_cast<double>(y) - cy;
-                cands.push_back(Candidate{.x = x, .y = y, .dist = (dx * dx) + (dy * dy)});
-            }
+        weightSum += static_cast<long long>(layers - l) * (layers - l);
+    }
+    std::vector<std::vector<int>> count(static_cast<std::size_t>(clusters),
+                                        std::vector<int>(static_cast<std::size_t>(layers), 0));
+    for (int c = 0; c < clusters; ++c) {
+        const int share =
+            (params_.tileCount / clusters) + ((c < (params_.tileCount % clusters)) ? 1 : 0);
+        std::vector<int>& layerCount = count.at(static_cast<std::size_t>(c));
+        int assigned = 0;
+        for (int l = 0; l < layers; ++l) {
+            const long long weight = static_cast<long long>(layers - l) * (layers - l);
+            const int want = static_cast<int>((static_cast<long long>(share) * weight) / weightSum);
+            layerCount.at(static_cast<std::size_t>(l)) = want;
+            assigned += want;
         }
-        std::ranges::shuffle(cands, rng); // random tie-break for variety
-        std::ranges::stable_sort(
-            cands, [](const Candidate& a, const Candidate& b) { return a.dist < b.dist; });
+        // Hand the flooring remainder to the upper layers (top first) so they are
+        // never left empty.
+        for (int l = layers - 1; l >= 0 && assigned < share; --l) {
+            ++layerCount.at(static_cast<std::size_t>(l));
+            ++assigned;
+        }
+    }
+    return count;
+}
+
+void TapMatchBoard::placeTiles(std::mt19937_64& rng) {
+    const int layers = params_.layers;
+    const int clusters = params_.clusters;
+    const int maxOx = params_.gridWidth - kTileSpan;  // inclusive max footprint origin x
+    const int maxOy = params_.gridHeight - kTileSpan; // inclusive max footprint origin y
+
+    // Cluster centres in a cols x rows meta-grid across the board (origin coords),
+    // like the original's spread-out tile piles.
+    const int cols = std::min(clusters, 2);
+    const int rows = (clusters + cols - 1) / cols;
+    std::vector<double> centerX(static_cast<std::size_t>(clusters));
+    std::vector<double> centerY(static_cast<std::size_t>(clusters));
+    for (int c = 0; c < clusters; ++c) {
+        const int metaCol = c % cols;
+        const int metaRow = c / cols;
+        centerX.at(static_cast<std::size_t>(c)) =
+            (static_cast<double>(metaCol) + 0.5) * static_cast<double>(maxOx + 1) / cols;
+        centerY.at(static_cast<std::size_t>(c)) =
+            (static_cast<double>(metaRow) + 0.5) * static_cast<double>(maxOy + 1) / rows;
     }
 
-    // Distribute the requested tile count across layers by the pyramid weights,
-    // capped by each layer's capacity, then hand out the flooring remainder to
-    // the roomiest lower layers so the total lands exactly on tileCount.
-    std::vector<int> count(static_cast<std::size_t>(layers), 0);
-    int assigned = 0;
-    for (int l = 0; l < layers; ++l) {
-        const auto cap = static_cast<int>(layerCands.at(static_cast<std::size_t>(l)).size());
-        const int want = clampInt(
-            static_cast<int>((static_cast<long long>(params_.tileCount) * ((2 * layers) - l)) /
-                             weightSum),
-            0, cap);
-        count.at(static_cast<std::size_t>(l)) = want;
-        assigned += want;
-    }
-    for (int l = 0; l < layers && assigned < params_.tileCount; ++l) {
-        const auto cap = static_cast<int>(layerCands.at(static_cast<std::size_t>(l)).size());
-        const int add =
-            std::min(cap - count.at(static_cast<std::size_t>(l)), params_.tileCount - assigned);
-        count.at(static_cast<std::size_t>(l)) += add;
-        assigned += add;
-    }
+    const std::vector<std::vector<int>> count = clusterLayerCounts(clusters, layers);
 
+    // Lay down each layer; within a layer, hand each cluster the lattice points
+    // nearest its centre. Alternating per-layer parities make higher layers
+    // interleave with and cover the ones below (so each cluster is a little
+    // staircase pile). The lattice guarantees no two same-layer tiles overlap.
     int nextId = 0;
     for (int l = 0; l < layers; ++l) {
-        const std::vector<Candidate>& cands = layerCands.at(static_cast<std::size_t>(l));
-        const int n = count.at(static_cast<std::size_t>(l));
-        for (int i = 0; i < n; ++i) {
-            const Candidate& c = cands.at(static_cast<std::size_t>(i));
-            tiles_.push_back(
-                Tile{.id = nextId, .icon = 0, .layer = l, .x = c.x, .y = c.y, .removed = false});
-            ++nextId;
+        const std::vector<GridPoint> points = latticePoints(l % 2, (l / 2) % 2, maxOx, maxOy);
+        std::vector<char> used(points.size(), 0);
+        for (int c = 0; c < clusters; ++c) {
+            const std::vector<std::size_t> chosen = nearestUnusedIndices(
+                points, used, centerX.at(static_cast<std::size_t>(c)),
+                centerY.at(static_cast<std::size_t>(c)),
+                count.at(static_cast<std::size_t>(c)).at(static_cast<std::size_t>(l)), rng);
+            for (const std::size_t i : chosen) {
+                used.at(i) = 1;
+                const GridPoint p = points.at(i);
+                tiles_.push_back(Tile{
+                    .id = nextId, .icon = 0, .layer = l, .x = p.x, .y = p.y, .removed = false});
+                ++nextId;
+            }
         }
     }
 
-    // Keep the count a multiple of kGroupSize so every icon can close out (only
-    // bites if capacity fell short of tileCount, which the params avoid).
+    // Keep the count a multiple of kGroupSize so every icon can close out.
     while (!tiles_.empty() && (tiles_.size() % kGroupSize) != 0) {
         tiles_.pop_back();
     }
