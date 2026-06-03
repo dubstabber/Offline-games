@@ -24,6 +24,15 @@ struct Settings {
     int tapmatchLevelEasy = 1;
     int tapmatchLevelMedium = 1;
     int tapmatchLevelHard = 1;
+    // Minesweeper win streaks per difficulty: the current run (reset to 0 on a
+    // loss) and the all-time best. Shown in the in-game CURRENT STREAK / ALL TIME
+    // panels; each difficulty tracks separately.
+    int minesweeperStreakEasy = 0;
+    int minesweeperStreakMedium = 0;
+    int minesweeperStreakHard = 0;
+    int minesweeperBestEasy = 0;
+    int minesweeperBestMedium = 0;
+    int minesweeperBestHard = 0;
 };
 
 // Pure and SDL-free (so they are unit-testable): turn Settings into the on-disk

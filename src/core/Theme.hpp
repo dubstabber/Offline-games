@@ -38,6 +38,12 @@ struct Theme {
     Color tmHolder;     // holder bar panel
     Color tmSlot;       // recessed holder slot
     Color tmStatusText; // "N left" status line
+
+    // Minesweeper.
+    Color msField;       // board + screen background (dark slate; numbers sit on it)
+    Color msTileCovered; // covered cell card (stays light to read in both themes)
+    Color msTileEdge;    // covered cell bottom shadow / separation
+    Color msPanel;       // CURRENT STREAK / ALL TIME HUD panels
 };
 
 // Light theme = the project's current colors (verbatim, so default builds look
@@ -69,6 +75,11 @@ inline constexpr Theme kLight{
     .tmHolder = colors::tapMatchHolder,
     .tmSlot = colors::tapMatchSlot,
     .tmStatusText = rgb(235, 198, 208),
+
+    .msField = rgb(74, 80, 92), // dark slate, like the original's field
+    .msTileCovered = rgb(242, 244, 248),
+    .msTileEdge = rgb(206, 210, 220),
+    .msPanel = rgb(38, 42, 52),
 };
 
 // Dark theme: charcoal chrome with near-white text; each game keeps its hue
@@ -100,6 +111,11 @@ inline constexpr Theme kDark{
     .tmHolder = rgb(42, 18, 26),
     .tmSlot = rgb(30, 12, 18),
     .tmStatusText = rgb(220, 180, 192),
+
+    .msField = rgb(30, 32, 38),          // darker slate
+    .msTileCovered = rgb(220, 224, 232), // stays light to back the numbers/emoji
+    .msTileEdge = rgb(150, 156, 170),
+    .msPanel = rgb(22, 24, 30),
 };
 
 // The active theme, selected by Settings::darkMode. Scenes call this fresh every

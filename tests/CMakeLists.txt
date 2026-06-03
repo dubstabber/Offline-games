@@ -23,3 +23,7 @@ add_test(NAME tapmatch_levels COMMAND test_tapmatch_levels)
 add_executable(test_settings test_settings.cpp)
 target_link_libraries(test_settings PRIVATE engine)
 add_test(NAME settings COMMAND test_settings)
+
+add_executable(test_minesweeper test_minesweeper.cpp)
+target_link_libraries(test_minesweeper PRIVATE engine)
+add_test(NAME minesweeper COMMAND test_minesweeper)

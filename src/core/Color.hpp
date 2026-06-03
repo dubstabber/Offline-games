@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <SDL3/SDL.h>
 
@@ -46,6 +47,23 @@ constexpr Color tapMatchTileDim = rgb(197, 194, 203);   // covered tile card
 constexpr Color tapMatchTileEdge = rgb(158, 150, 162);  // tile border/separation
 constexpr Color tapMatchHolder = rgb(96, 38, 52);       // holder bar panel
 constexpr Color tapMatchSlot = rgb(78, 30, 44);         // recessed holder slot
+
+// Minesweeper: the classic adjacent-mine number colors (1..8), chosen to read on
+// the dark slate field, plus the shovel/flag toggle's active green and idle slate
+// (the green is the original's flagButtonColorWhenFlagging). Identity colors:
+// they do not flip with the theme.
+constexpr std::array<Color, 8> mineNumbers = {
+    rgb(54, 118, 240),  // 1 blue
+    rgb(64, 168, 78),   // 2 green
+    rgb(232, 80, 80),   // 3 red
+    rgb(150, 110, 230), // 4 purple
+    rgb(214, 140, 70),  // 5 amber
+    rgb(48, 190, 190),  // 6 teal
+    rgb(210, 214, 224), // 7 light grey
+    rgb(150, 156, 170), // 8 grey
+};
+constexpr Color mineToggleActive = rgb(118, 202, 62); // selected dig/flag mode
+constexpr Color mineToggleIdle = rgb(96, 104, 120);   // unselected mode
 
 constexpr Color white = rgb(255, 255, 255);
 constexpr Color overlay = rgb(0, 0, 0, 150); // semi-transparent game-over layer

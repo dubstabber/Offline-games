@@ -1,5 +1,6 @@
 #include "games/GameRegistry.hpp"
 
+#include "games/minesweeper/MineSweeperScene.hpp"
 #include "games/tapmatch/TapMatchScene.hpp"
 #include "games/tictactoe/TicTacToeScene.hpp"
 
@@ -39,6 +40,18 @@ const std::vector<GameInfo>& gameRegistry() {
             },
             .currentLevel = [](Difficulty difficulty) { return tapMatchSavedLevel(difficulty); },
         });
+        list.push_back(GameInfo{
+            .id = "minesweeper",
+            .title = "Minesweeper",
+            .emoji = "\xF0\x9F\x92\xA3", // 💣
+            .description = "Find all the mines by clearing every square that isn't a mine. The "
+                           "numbers tell you how many adjacent squares are mines; use flags to "
+                           "mark them. Each level is always fully solvable using logic!",
+            .accent = colors::accent,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<MineSweeperScene>(manager, difficulty);
+            },
+        });
 
         // Placeholder cards for games not built yet: a title/emoji/accent so the
         // menu has something to show and scroll, but no `create` factory, so the
@@ -56,7 +69,6 @@ const std::vector<GameInfo>& gameRegistry() {
         placeholder("snake", "Snake", "\xF0\x9F\x90\x8D", colors::easyGreen);          // 🐍
         placeholder("memory", "Memory", "\xF0\x9F\xA7\xA0", colors::botCyan);          // 🧠
         placeholder("2048", "2048", "\xF0\x9F\x94\xA2", colors::mediumOrange);         // 🔢
-        placeholder("mines", "Mines", "\xF0\x9F\x92\xA3", colors::menuPink);           // 💣
         placeholder("connect4", "Connect 4", "\xF0\x9F\x94\xB4", colors::menuPurple);  // 🔴
         placeholder("solitaire", "Solitaire", "\xF0\x9F\x83\x8F", colors::menuYellow); // 🃏
         placeholder("puzzle", "Puzzle", "\xF0\x9F\xA7\xA9", colors::easyGreen);        // 🧩

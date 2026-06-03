@@ -51,6 +51,9 @@ add_library(engine STATIC
     src/games/tapmatch/TapMatchBoard.cpp
     src/games/tapmatch/TapMatchLevels.cpp
     src/games/tapmatch/TapMatchScene.cpp
+    src/games/minesweeper/MineSweeperBoard.cpp
+    src/games/minesweeper/MineSweeperSolver.cpp
+    src/games/minesweeper/MineSweeperScene.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
     src/scenes/SettingsScene.cpp)

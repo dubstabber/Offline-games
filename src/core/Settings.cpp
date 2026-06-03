@@ -95,6 +95,18 @@ std::string serialize(const Settings& settings) {
     out += std::to_string(settings.tapmatchLevelMedium);
     out += "\ntapmatchLevelHard=";
     out += std::to_string(settings.tapmatchLevelHard);
+    out += "\nminesweeperStreakEasy=";
+    out += std::to_string(settings.minesweeperStreakEasy);
+    out += "\nminesweeperStreakMedium=";
+    out += std::to_string(settings.minesweeperStreakMedium);
+    out += "\nminesweeperStreakHard=";
+    out += std::to_string(settings.minesweeperStreakHard);
+    out += "\nminesweeperBestEasy=";
+    out += std::to_string(settings.minesweeperBestEasy);
+    out += "\nminesweeperBestMedium=";
+    out += std::to_string(settings.minesweeperBestMedium);
+    out += "\nminesweeperBestHard=";
+    out += std::to_string(settings.minesweeperBestHard);
     out += "\n";
     return out;
 }
@@ -130,6 +142,18 @@ Settings parse(std::string_view text) {
             parseInt(value, settings.tapmatchLevelMedium);
         } else if (key == "tapmatchLevelHard") {
             parseInt(value, settings.tapmatchLevelHard);
+        } else if (key == "minesweeperStreakEasy") {
+            parseInt(value, settings.minesweeperStreakEasy);
+        } else if (key == "minesweeperStreakMedium") {
+            parseInt(value, settings.minesweeperStreakMedium);
+        } else if (key == "minesweeperStreakHard") {
+            parseInt(value, settings.minesweeperStreakHard);
+        } else if (key == "minesweeperBestEasy") {
+            parseInt(value, settings.minesweeperBestEasy);
+        } else if (key == "minesweeperBestMedium") {
+            parseInt(value, settings.minesweeperBestMedium);
+        } else if (key == "minesweeperBestHard") {
+            parseInt(value, settings.minesweeperBestHard);
         }
         // Unknown keys are ignored so older/newer files stay forward-compatible.
     }
@@ -138,6 +162,12 @@ Settings parse(std::string_view text) {
     settings.tapmatchLevelEasy = std::max(1, settings.tapmatchLevelEasy);
     settings.tapmatchLevelMedium = std::max(1, settings.tapmatchLevelMedium);
     settings.tapmatchLevelHard = std::max(1, settings.tapmatchLevelHard);
+    settings.minesweeperStreakEasy = std::max(0, settings.minesweeperStreakEasy);
+    settings.minesweeperStreakMedium = std::max(0, settings.minesweeperStreakMedium);
+    settings.minesweeperStreakHard = std::max(0, settings.minesweeperStreakHard);
+    settings.minesweeperBestEasy = std::max(0, settings.minesweeperBestEasy);
+    settings.minesweeperBestMedium = std::max(0, settings.minesweeperBestMedium);
+    settings.minesweeperBestHard = std::max(0, settings.minesweeperBestHard);
     return settings;
 }
 
