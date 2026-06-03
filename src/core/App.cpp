@@ -63,11 +63,17 @@ void App::dispatchPointer(const SDL_Event& converted) {
     if (scene == nullptr) {
         return;
     }
+    // SDL cross-generates events between touch and mouse: a finger touch also
+    // arrives as a synthetic mouse event (which == SDL_TOUCH_MOUSEID), and a mouse
+    // click can arrive as a synthetic finger event (touchID == SDL_MOUSE_TOUCHID).
+    // Dropping the synthetic copies leaves one pointer stream per physical input —
+    // otherwise a single tap fires Down twice, e.g. popping two Tap Match tiles.
     PointerEvent pointer;
     switch (converted.type) {
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
     case SDL_EVENT_MOUSE_BUTTON_UP:
-        if (converted.button.button != SDL_BUTTON_LEFT) {
+        if (converted.button.button != SDL_BUTTON_LEFT ||
+            converted.button.which == SDL_TOUCH_MOUSEID) {
             return;
         }
         pointer.phase = converted.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? PointerEvent::Phase::Down
@@ -77,17 +83,26 @@ void App::dispatchPointer(const SDL_Event& converted) {
         break;
     case SDL_EVENT_FINGER_DOWN:
     case SDL_EVENT_FINGER_UP:
+        if (converted.tfinger.touchID == SDL_MOUSE_TOUCHID) {
+            return;
+        }
         pointer.phase = converted.type == SDL_EVENT_FINGER_DOWN ? PointerEvent::Phase::Down
                                                                 : PointerEvent::Phase::Up;
         pointer.x = converted.tfinger.x;
         pointer.y = converted.tfinger.y;
         break;
     case SDL_EVENT_MOUSE_MOTION:
+        if (converted.motion.which == SDL_TOUCH_MOUSEID) {
+            return;
+        }
         pointer.phase = PointerEvent::Phase::Move;
         pointer.x = converted.motion.x;
         pointer.y = converted.motion.y;
         break;
     case SDL_EVENT_FINGER_MOTION:
+        if (converted.tfinger.touchID == SDL_MOUSE_TOUCHID) {
+            return;
+        }
         pointer.phase = PointerEvent::Phase::Move;
         pointer.x = converted.tfinger.x;
         pointer.y = converted.tfinger.y;
