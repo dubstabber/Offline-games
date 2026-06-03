@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <string>
 
 namespace og {
 namespace {
@@ -98,6 +99,11 @@ DifficultySelectScene::DifficultySelectScene(SceneManager& manager, GameInfo inf
                            [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     setDifficulty(difficulty_);
     playButton_.setOnTap([this] { manager_.push(info_.create(manager_, difficulty_)); });
+    if (info_.currentLevel) {
+        // PLAY and the "Level N" subtitle are drawn as two lines in render(), so
+        // the button itself draws only its fill (empty label).
+        playButton_.setLabel("");
+    }
 }
 
 void DifficultySelectScene::setDifficulty(Difficulty difficulty) {
@@ -209,6 +215,15 @@ void DifficultySelectScene::render(Canvas& canvas) {
     canvas.fillCircle(knobX, kTrackCy, kKnobRadius - 8.0F, color(difficulty_));
 
     playButton_.render(canvas);
+    // For level-tracked games (e.g. Tap Match), draw "PLAY" over a "Level N"
+    // subtitle inside the button — matching the original's difficulty screen.
+    if (info_.currentLevel) {
+        const float cx = layout::kWidthF / 2.0F;
+        canvas.textCentered("PLAY", cx, kPlayY + (kPlayH * 0.38F), kPlayH * 0.40F, colors::white);
+        const std::string levelText = "Level " + std::to_string(info_.currentLevel(difficulty_));
+        canvas.textCentered(levelText, cx, kPlayY + (kPlayH * 0.74F), kPlayH * 0.20F,
+                            colors::white);
+    }
 }
 
 } // namespace og

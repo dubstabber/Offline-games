@@ -49,6 +49,7 @@ add_library(engine STATIC
     src/games/tictactoe/TicTacToeBot.cpp
     src/games/tictactoe/TicTacToeScene.cpp
     src/games/tapmatch/TapMatchBoard.cpp
+    src/games/tapmatch/TapMatchLevels.cpp
     src/games/tapmatch/TapMatchScene.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
@@ -70,6 +71,15 @@ add_custom_command(TARGET offline-games POST_BUILD
             "${CMAKE_SOURCE_DIR}/assets/fonts"
             "$<TARGET_FILE_DIR:offline-games>/assets/fonts"
     COMMENT "Bundling fonts next to the executable")
+
+# Ship the Tap Match level data the same way: a binary blob of every original
+# board, parsed at runtime (see games/tapmatch/TapMatchLevels). It is data, not
+# an image, so the "no image assets" rule does not apply.
+add_custom_command(TARGET offline-games POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/assets/tapmatch"
+            "$<TARGET_FILE_DIR:offline-games>/assets/tapmatch"
+    COMMENT "Bundling Tap Match levels next to the executable")
 
 # ---- Tests -------------------------------------------------------------------
 include(CTest)

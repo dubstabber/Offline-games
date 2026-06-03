@@ -1,5 +1,7 @@
 #pragma once
 
+#include "games/tapmatch/TapMatchLevels.hpp"
+
 #include <array>
 #include <cstdint>
 #include <random>
@@ -58,6 +60,13 @@ public:
 
     TapMatchBoard(const GenParams& params, std::uint64_t seed);
 
+    // Build a board from an authored original-game layout: the tile geometry is
+    // fixed (no procedural placement) and only the solvable icon colouring is
+    // generated from `seed`. iconVariety/holderBudget come from the layout's
+    // iconsCount/initStackSize; the grid is sized to the tiles. The layout's tile
+    // count must be a multiple of kGroupSize (original boards always are).
+    TapMatchBoard(const LevelLayout& layout, std::uint64_t seed);
+
     [[nodiscard]] const std::vector<Tile>& tiles() const { return tiles_; }
     [[nodiscard]] int iconVariety() const { return params_.iconVariety; }
     [[nodiscard]] int gridWidth() const { return params_.gridWidth; }
@@ -91,6 +100,12 @@ private:
     }
 
     void placeTiles(std::mt19937_64& rng);
+    // Load an authored layout's tiles + knobs (the layout-ctor's geometry step,
+    // mirroring placeTiles for the procedural one).
+    void loadLayout(const LevelLayout& layout);
+    // Shared tail of both constructors: derive coverage, a guaranteed-playable
+    // peel order, and a colouring that wins along it (with a trivial fallback).
+    void finalize(std::mt19937_64& rng);
     // Tiles per (cluster, layer): split tileCount across clusters, then each
     // cluster's share across layers by a lower-heavy pyramid weight.
     [[nodiscard]] std::vector<std::vector<int>> clusterLayerCounts(int clusters, int layers) const;

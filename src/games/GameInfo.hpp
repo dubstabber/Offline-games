@@ -17,12 +17,17 @@ class SceneManager;
 // `description` is shown and PLAY calls `create` with the chosen Difficulty.
 // Adding a game = append one of these in GameRegistry.cpp (see "Adding a game").
 struct GameInfo {
-    std::string id;          // stable identifier (e.g. for future save data)
+    std::string id;          // stable identifier (e.g. for save data)
     std::string title;       // shown on the menu card
     std::string emoji;       // single emoji icon, drawn from a font (no images)
     std::string description; // shown on the difficulty screen
     Color accent{};          // theme color for the card + PLAY button
-    std::function<std::unique_ptr<Scene>(SceneManager&, Difficulty)> create;
+    std::function<std::unique_ptr<Scene>(SceneManager&, Difficulty)> create = nullptr;
+
+    // Optional: games with per-difficulty level progress provide this so the
+    // difficulty screen can show "Level N" on PLAY for the selected difficulty
+    // (e.g. Tap Match). Left null for games without a level counter.
+    std::function<int(Difficulty)> currentLevel = nullptr;
 };
 
 } // namespace og

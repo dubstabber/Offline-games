@@ -18,6 +18,12 @@ struct Settings {
     bool music = true;
     bool vibration = true;
     int maxFps = 120;
+    // Tap Match progress: the current level (1-based) reached in each difficulty.
+    // Clearing the level advances its counter; the difficulty screen shows it on
+    // PLAY. Each difficulty has its own pool of boards, so each tracks separately.
+    int tapmatchLevelEasy = 1;
+    int tapmatchLevelMedium = 1;
+    int tapmatchLevelHard = 1;
 };
 
 // Pure and SDL-free (so they are unit-testable): turn Settings into the on-disk

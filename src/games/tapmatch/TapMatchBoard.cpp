@@ -137,7 +137,40 @@ TapMatchBoard::TapMatchBoard(const GenParams& params, std::uint64_t seed) : para
     params_.clusters = clampInt(params_.clusters, 1, 4);
 
     std::mt19937_64 rng(seed);
-    placeTiles(rng);          // geometry: layered, overlapping footprints
+    placeTiles(rng); // geometry: layered, overlapping footprints
+    finalize(rng);   // coverage + a peel order + a winning colouring
+}
+
+TapMatchBoard::TapMatchBoard(const LevelLayout& layout, std::uint64_t seed) {
+    loadLayout(layout); // authored geometry (mirrors placeTiles for the random path)
+    std::mt19937_64 rng(seed);
+    finalize(rng); // colour it — the original generates a colouring too (not stored)
+}
+
+void TapMatchBoard::loadLayout(const LevelLayout& layout) {
+    // The original stores no icons either; it reverse-constructs a solvable
+    // colouring from iconsCount + initStackSize, which is what finalize() does.
+    params_.iconVariety = clampInt(layout.iconsCount, 1, kMaxIcons);
+    params_.holderBudget = clampInt(layout.initStackSize, kGroupSize, kHolderCapacity - 1);
+
+    int maxX = kTileSpan + 1;
+    int maxY = kTileSpan + 1;
+    int id = 0;
+    tiles_.reserve(layout.tiles.size());
+    for (const PlacedTile& t : layout.tiles) {
+        tiles_.push_back(
+            Tile{.id = id, .icon = 0, .layer = t.layer, .x = t.x, .y = t.y, .removed = false});
+        ++id;
+        maxX = std::max(maxX, t.x + kTileSpan);
+        maxY = std::max(maxY, t.y + kTileSpan);
+    }
+    // Size the grid to the authored tiles so the scene can fit/centre the board.
+    params_.gridWidth = maxX;
+    params_.gridHeight = maxY;
+    remaining_ = static_cast<int>(tiles_.size());
+}
+
+void TapMatchBoard::finalize(std::mt19937_64& rng) {
     buildCoverGraph();        // who covers whom
     computeRemovalOrder(rng); // a peel order that is always playable
     assignIcons(rng);         // colour it so that peel order also wins

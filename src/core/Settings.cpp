@@ -89,6 +89,12 @@ std::string serialize(const Settings& settings) {
     out += settings.vibration ? "1" : "0";
     out += "\nmaxFps=";
     out += std::to_string(settings.maxFps);
+    out += "\ntapmatchLevelEasy=";
+    out += std::to_string(settings.tapmatchLevelEasy);
+    out += "\ntapmatchLevelMedium=";
+    out += std::to_string(settings.tapmatchLevelMedium);
+    out += "\ntapmatchLevelHard=";
+    out += std::to_string(settings.tapmatchLevelHard);
     out += "\n";
     return out;
 }
@@ -118,11 +124,20 @@ Settings parse(std::string_view text) {
             parseBool(value, settings.vibration);
         } else if (key == "maxFps") {
             parseInt(value, settings.maxFps);
+        } else if (key == "tapmatchLevelEasy") {
+            parseInt(value, settings.tapmatchLevelEasy);
+        } else if (key == "tapmatchLevelMedium") {
+            parseInt(value, settings.tapmatchLevelMedium);
+        } else if (key == "tapmatchLevelHard") {
+            parseInt(value, settings.tapmatchLevelHard);
         }
         // Unknown keys are ignored so older/newer files stay forward-compatible.
     }
     settings.volume = std::clamp(settings.volume, 0.0F, 1.0F);
     settings.maxFps = snapFps(settings.maxFps);
+    settings.tapmatchLevelEasy = std::max(1, settings.tapmatchLevelEasy);
+    settings.tapmatchLevelMedium = std::max(1, settings.tapmatchLevelMedium);
+    settings.tapmatchLevelHard = std::max(1, settings.tapmatchLevelHard);
     return settings;
 }
 

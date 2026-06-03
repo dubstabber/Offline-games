@@ -31,9 +31,13 @@ const std::vector<GameInfo>& gameRegistry() {
             .description = "Tap to collect cards. Complete sets of 3 to clear cards. You can hold "
                            "up to 7 cards in your stack, so collect strategically.",
             .accent = colors::menuPink,
+            // Each difficulty plays its own pool of the original game's boards (see
+            // TapMatchLevels), tracking its own level; PLAY launches the saved one.
             .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
-                return std::make_unique<TapMatchScene>(manager, difficulty);
+                return std::make_unique<TapMatchScene>(manager, difficulty,
+                                                       tapMatchSavedLevel(difficulty));
             },
+            .currentLevel = [](Difficulty difficulty) { return tapMatchSavedLevel(difficulty); },
         });
 
         // Placeholder cards for games not built yet: a title/emoji/accent so the

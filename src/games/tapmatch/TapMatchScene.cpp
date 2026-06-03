@@ -4,12 +4,15 @@
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
+#include "core/Settings.hpp"
 #include "core/Theme.hpp"
+#include "games/tapmatch/TapMatchLevels.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <memory>
 #include <random>
 #include <string>
 #include <vector>
@@ -22,14 +25,20 @@ constexpr float kBackCx = 92.0F;
 constexpr float kBackCy = 100.0F;
 constexpr float kBackRadius = 56.0F;
 
-// ---- Board: a fixed fine grid mapped to pixels (16x22 cells) ----------------
-constexpr float kFineCell = 38.0F;       // one fine grid cell
-constexpr float kTilePx = kFineCell * 2; // a tile footprint is 2x2 cells (76px)
-constexpr float kBoardX = 56.0F;         // (720 - 16*38) / 2
-constexpr float kBoardY = 200.0F;
-constexpr float kTileInset = 5.0F; // gap between a tile's cell and its card
-constexpr float kTileRadius = 16.0F;
-constexpr float kEmojiPx = 46.0F; // fruit size on a ~66px card (leaves a grey margin)
+// ---- Board play area: authored boards are fitted/centred into this rect ------
+// (Tile size and origin are computed per board in layoutBoard, since the
+// original levels vary in extent; only the bounding area below is fixed.)
+constexpr float kBoardAreaX = 40.0F;
+constexpr float kBoardAreaTop = 196.0F;
+constexpr float kBoardAreaBottom = 1126.0F; // just above the holder bar
+constexpr float kBoardAreaW = layout::kWidthF - (2.0F * kBoardAreaX);
+constexpr float kBoardAreaH = kBoardAreaBottom - kBoardAreaTop;
+constexpr float kMaxCellPx = 40.0F; // cap so small boards don't get huge tiles
+// Tile visuals as fractions of the (variable) tile footprint (kTileSpan cells).
+constexpr float kTileInsetFrac = 0.066F; // grey margin around the card
+constexpr float kTileRadiusFrac = 0.21F; // card corner radius
+constexpr float kTileEdgeFrac = 0.052F;  // border separating stacked tiles
+constexpr float kEmojiFrac = 0.605F;     // fruit size on the card
 
 // ---- Holder bar (7 slots, near the bottom) ---------------------------------
 constexpr float kHolderX = 40.0F;
@@ -119,40 +128,37 @@ constexpr float kHolderRowCy = kHolderY + (kHolderH / 2.0F);
     return 1.3F * (1.0F - easeInCubic((p - 0.25F) / 0.75F));
 }
 
-[[nodiscard]] TapMatchBoard::GenParams paramsFor(Difficulty difficulty) {
+// Difficulty -> complexity tier index (Easy=0, Medium=1, Hard=2).
+[[nodiscard]] int difficultyTier(Difficulty difficulty) {
+    return static_cast<int>(difficulty);
+}
+
+// The Settings field holding the current level for a difficulty.
+[[nodiscard]] int& savedLevelField(Settings& s, Difficulty difficulty) {
     switch (difficulty) {
     case Difficulty::Easy:
-        return {.iconVariety = 4,
-                .layers = 2,
-                .tileCount = 18,
-                .holderBudget = 5,
-                .gridWidth = 16,
-                .gridHeight = 22,
-                .clusters = 2};
+        return s.tapmatchLevelEasy;
     case Difficulty::Medium:
-        return {.iconVariety = 6,
-                .layers = 2,
-                .tileCount = 36,
-                .holderBudget = 6,
-                .gridWidth = 16,
-                .gridHeight = 22,
-                .clusters = 4};
+        return s.tapmatchLevelMedium;
     case Difficulty::Hard:
-        return {.iconVariety = 8,
-                .layers = 3,
-                .tileCount = 54,
-                .holderBudget = 6,
-                .gridWidth = 16,
-                .gridHeight = 22,
-                .clusters = 4};
+        return s.tapmatchLevelHard;
     }
-    return {.iconVariety = 6,
-            .layers = 2,
-            .tileCount = 36,
-            .holderBudget = 6,
-            .gridWidth = 16,
-            .gridHeight = 22,
-            .clusters = 4};
+    return s.tapmatchLevelMedium;
+}
+
+void setSavedLevel(Difficulty difficulty, int level) {
+    savedLevelField(settings(), difficulty) = std::max(1, level);
+    saveSettings(settings());
+}
+
+// Build the board for (difficulty, 1-based level) from that difficulty's pool of
+// original boards. Falls back to a small procedural board if the asset is missing.
+[[nodiscard]] TapMatchBoard boardFor(Difficulty difficulty, int level) {
+    const LevelLayout* layout = tapMatchTierLevel(difficultyTier(difficulty), level);
+    if (layout != nullptr) {
+        return {*layout, std::random_device{}()};
+    }
+    return {TapMatchBoard::GenParams{}, std::random_device{}()};
 }
 
 // Icon index -> a fruit emoji (UTF-8 bytes). A board uses the first `iconVariety`
@@ -188,16 +194,21 @@ constexpr float kHolderRowCy = kHolderY + (kHolderH / 2.0F);
 
 } // namespace
 
-TapMatchScene::TapMatchScene(SceneManager& manager, Difficulty difficulty)
-    : manager_(manager), difficulty_(difficulty),
-      board_(paramsFor(difficulty), std::random_device{}()),
+int tapMatchSavedLevel(Difficulty difficulty) {
+    return savedLevelField(settings(), difficulty);
+}
+
+TapMatchScene::TapMatchScene(SceneManager& manager, Difficulty difficulty, int level)
+    : manager_(manager), difficulty_(difficulty), level_(level),
+      board_(boardFor(difficulty, level)),
       homeButton_("\xF0\x9F\x8F\xA0", kRowX, kButtonRowY, kHomeSize, kHomeSize), // 🏠
       playAgainButton_("PLAY AGAIN", kRowX + kHomeSize + kButtonGap, kButtonRowY, kPlayAgainW,
                        kHomeSize) {
     homeButton_.setColors(colors::white, colors::panelBrown);
     homeButton_.setOnTap([this] { manager_.popToRoot(); });
-    playAgainButton_.setColors(color(difficulty_), colors::white);
-    playAgainButton_.setOnTap([this] { beginRound(); });
+    // The action button's label/handler are set per result in enterGameOver().
+    playAgainButton_.setColors(colors::menuPink, colors::white);
+    layoutBoard();
     resetFx();
 }
 
@@ -221,15 +232,17 @@ bool TapMatchScene::handleBackButton(const PointerEvent& event) {
 }
 
 int TapMatchScene::pickAccessibleAt(float px, float py) const {
+    const float cell = boardCellPx_;
+    const float tilePx = cell * static_cast<float>(TapMatchBoard::kTileSpan);
     int best = -1;
     int bestLayer = -1;
     for (const auto& tile : board_.tiles()) {
         if (tile.removed) {
             continue;
         }
-        const float x = kBoardX + (static_cast<float>(tile.x) * kFineCell);
-        const float y = kBoardY + (static_cast<float>(tile.y) * kFineCell);
-        if (px >= x && px < x + kTilePx && py >= y && py < y + kTilePx && tile.layer > bestLayer) {
+        const float x = boardOriginX_ + (static_cast<float>(tile.x) * cell);
+        const float y = boardOriginY_ + (static_cast<float>(tile.y) * cell);
+        if (px >= x && px < x + tilePx && py >= y && py < y + tilePx && tile.layer > bestLayer) {
             best = tile.id;
             bestLayer = tile.layer;
         }
@@ -263,13 +276,34 @@ void TapMatchScene::update(float dtSeconds) {
 }
 
 void TapMatchScene::beginRound() {
-    board_ = TapMatchBoard(paramsFor(difficulty_), std::random_device{}());
+    board_ = boardFor(difficulty_, level_);
     phase_ = Phase::Playing;
+    layoutBoard();
     resetFx();
 }
 
 void TapMatchScene::enterGameOver() {
     phase_ = Phase::GameOver;
+    // Set the action button by result: advance, replay the final level, or retry.
+    const bool won = board_.result() == TapMatchBoard::Result::Won;
+    const int lastLevel = tapMatchTierSize(difficultyTier(difficulty_));
+    if (won && level_ < lastLevel) {
+        playAgainButton_.setLabel("NEXT");
+        playAgainButton_.setOnTap([this] {
+            manager_.replace(std::make_unique<TapMatchScene>(manager_, difficulty_, level_ + 1));
+        });
+    } else {
+        playAgainButton_.setLabel(won ? "REPLAY" : "RETRY");
+        playAgainButton_.setOnTap([this] { beginRound(); });
+    }
+}
+
+void TapMatchScene::layoutBoard() {
+    const auto gw = static_cast<float>(std::max(1, board_.gridWidth()));
+    const auto gh = static_cast<float>(std::max(1, board_.gridHeight()));
+    boardCellPx_ = std::min({kBoardAreaW / gw, kBoardAreaH / gh, kMaxCellPx});
+    boardOriginX_ = kBoardAreaX + ((kBoardAreaW - (gw * boardCellPx_)) / 2.0F);
+    boardOriginY_ = kBoardAreaTop + ((kBoardAreaH - (gh * boardCellPx_)) / 2.0F);
 }
 
 void TapMatchScene::resetFx() {
@@ -320,8 +354,10 @@ void TapMatchScene::spawnSparks(float x, float y) {
 void TapMatchScene::startTap(int id) {
     const TapMatchBoard::Tile& tile = board_.tiles().at(static_cast<std::size_t>(id));
     const int icon = tile.icon;
-    const float cx = kBoardX + (static_cast<float>(tile.x) * kFineCell) + (kTilePx / 2.0F);
-    const float cy = kBoardY + (static_cast<float>(tile.y) * kFineCell) + (kTilePx / 2.0F);
+    const float cell = boardCellPx_;
+    const float tilePx = cell * static_cast<float>(TapMatchBoard::kTileSpan);
+    const float cx = boardOriginX_ + (static_cast<float>(tile.x) * cell) + (tilePx / 2.0F);
+    const float cy = boardOriginY_ + (static_cast<float>(tile.y) * cell) + (tilePx / 2.0F);
 
     int preCount = 0;
     for (const int held : board_.holder()) {
@@ -365,7 +401,7 @@ void TapMatchScene::startTap(int id) {
                               .icon = icon,
                               .x0 = cx,
                               .y0 = cy,
-                              .size0 = kEmojiPx,
+                              .size0 = tilePx * kEmojiFrac,
                               .t = 0.0F,
                               .dur = flyDuration(cx, cy, slotCenterX(slot), kHolderRowCy)});
 
@@ -380,6 +416,11 @@ void TapMatchScene::startTap(int id) {
 
     if (board_.result() == TapMatchBoard::Result::Won) {
         wonPending_ = true; // defer the overlay until the last match finishes
+        // Advance (and persist) this difficulty's progress when a new level falls.
+        const int lastLevel = tapMatchTierSize(difficultyTier(difficulty_));
+        if (level_ < lastLevel && level_ + 1 > tapMatchSavedLevel(difficulty_)) {
+            setSavedLevel(difficulty_, level_ + 1);
+        }
     } else if (board_.result() == TapMatchBoard::Result::Lost) {
         losePending_ = true; // let the fruit land in the last slot, then game over
     }
@@ -496,20 +537,27 @@ void TapMatchScene::drawBackButton(Canvas& canvas) {
 
 void TapMatchScene::drawTopBar(Canvas& canvas) const {
     drawBackButton(canvas);
-    canvas.textCentered("Tap Match", layout::kWidthF / 2.0F, 92.0F, 52.0F, theme().primaryText);
+    canvas.textCentered("Level " + std::to_string(level_), layout::kWidthF / 2.0F, 92.0F, 52.0F,
+                        theme().primaryText);
     canvas.textCentered(statusText(), layout::kWidthF / 2.0F, 150.0F, 28.0F, theme().tmStatusText);
 }
 
 void TapMatchScene::drawBoard(Canvas& canvas) const {
     const bool intro = introActive();
+    const float cell = boardCellPx_;
+    const float tilePx = cell * static_cast<float>(TapMatchBoard::kTileSpan);
+    const float inset = tilePx * kTileInsetFrac;
+    const float radius = tilePx * kTileRadiusFrac;
+    const float edge = tilePx * kTileEdgeFrac;
+    const float emojiPx = tilePx * kEmojiFrac;
     // tiles() is ordered by ascending layer, so iterating in order paints higher
     // (covering) tiles on top of the ones they sit over.
     for (const auto& tile : board_.tiles()) {
         if (tile.removed) {
             continue;
         }
-        float cx = kBoardX + (static_cast<float>(tile.x) * kFineCell) + (kTilePx / 2.0F);
-        float cy = kBoardY + (static_cast<float>(tile.y) * kFineCell) + (kTilePx / 2.0F);
+        float cx = boardOriginX_ + (static_cast<float>(tile.x) * cell) + (tilePx / 2.0F);
+        float cy = boardOriginY_ + (static_cast<float>(tile.y) * cell) + (tilePx / 2.0F);
         float scale = 1.0F;
         if (intro) {
             // Fly in from a corner, staggered by layer (later layers land later).
@@ -524,16 +572,17 @@ void TapMatchScene::drawBoard(Canvas& canvas) const {
             scale = lerp(0.5F, 1.0F, e);
         }
         const bool accessible = board_.isAccessible(tile.id);
-        const float cardW = (kTilePx - (2.0F * kTileInset)) * scale;
+        const float cardW = (tilePx - (2.0F * inset)) * scale;
+        const float border = 2.0F * edge; // total extra width (edge on each side)
         // A grey border (slightly larger) separates overlapping tiles, then the
         // card itself (white & raised when free, grey when covered).
-        canvas.fillRoundedRect(cx - ((cardW + 4.0F) / 2.0F), cy - ((cardW + 4.0F) / 2.0F),
-                               cardW + 4.0F, cardW + 4.0F, (kTileRadius + 2.0F) * scale,
+        canvas.fillRoundedRect(cx - ((cardW + border) / 2.0F), cy - ((cardW + border) / 2.0F),
+                               cardW + border, cardW + border, (radius + edge) * scale,
                                theme().tmTileEdge);
         canvas.fillRoundedRect(cx - (cardW / 2.0F), cy - (cardW / 2.0F), cardW, cardW,
-                               kTileRadius * scale,
+                               radius * scale,
                                accessible ? theme().tmTileLight : theme().tmTileDim);
-        canvas.emojiCentered(emojiFor(tile.icon), cx, cy, kEmojiPx * scale);
+        canvas.emojiCentered(emojiFor(tile.icon), cx, cy, emojiPx * scale);
     }
 }
 

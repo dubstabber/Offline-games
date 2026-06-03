@@ -13,14 +13,20 @@ namespace og {
 
 class SceneManager;
 
+// Per-difficulty Tap Match progress (1-based current level), persisted via
+// Settings. Each difficulty plays its own pool of boards, so each tracks
+// separately. The difficulty screen shows the saved level on PLAY.
+[[nodiscard]] int tapMatchSavedLevel(Difficulty difficulty);
+
 // Renders a Tap Match board — overlapping piles of fruit-emoji tiles on a maroon
 // field with a 7-slot holder bar — and turns taps into moves. Tapping an
 // uncovered (bright) tile sends its fruit to the holder; three of a kind clear.
-// Clear the board to win; fill the holder with no triple to lose. Difficulty
-// scales fruit variety, tile count, and how deep the piles stack.
+// Clear the board to win; fill the holder with no triple to lose. Each level is
+// one of the original game's authored boards (see TapMatchLevels); winning
+// unlocks the next. The board is fitted/centred to its tile extent.
 class TapMatchScene : public Scene {
 public:
-    TapMatchScene(SceneManager& manager, Difficulty difficulty);
+    TapMatchScene(SceneManager& manager, Difficulty difficulty, int level);
 
     void handleInput(const PointerEvent& event) override;
     void update(float dtSeconds) override;
@@ -34,6 +40,9 @@ private:
     bool handleBackButton(const PointerEvent& event);
     void beginRound();
     void enterGameOver();
+    // Fit the current board's tile extent into the play area: pick a cell size
+    // (capped) and centre it, so authored boards of any shape stay on screen.
+    void layoutBoard();
 
     // The id of the uncovered tile under (px, py), or -1 if the topmost tile
     // there is covered or there is none.
@@ -93,7 +102,12 @@ private:
 
     SceneManager& manager_;
     Difficulty difficulty_;
+    int level_; // 1-based level within this difficulty's pool
     TapMatchBoard board_;
+    // Board placement in pixels, recomputed per board so any authored extent fits.
+    float boardCellPx_ = 38.0F;
+    float boardOriginX_ = 56.0F;
+    float boardOriginY_ = 200.0F;
     Phase phase_ = Phase::Playing;
     bool backPressed_ = false;
     Button homeButton_;
