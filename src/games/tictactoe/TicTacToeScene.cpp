@@ -4,6 +4,7 @@
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
+#include "core/Theme.hpp"
 
 #include <random>
 #include <string>
@@ -17,7 +18,6 @@ using Cell = TicTacToeBoard::Cell;
 constexpr float kBackCx = 92.0F;
 constexpr float kBackCy = 100.0F;
 constexpr float kBackRadius = 56.0F;
-constexpr Color kChevron = rgb(176, 124, 162); // mauve, like the screenshot
 
 // ---- Scoreboard panel ----------------------------------------------------
 constexpr float kPanelW = 420.0F;
@@ -149,10 +149,10 @@ std::string TicTacToeScene::resultText() const {
 }
 
 void TicTacToeScene::drawBackButton(Canvas& canvas) {
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, colors::white);
+    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
     // A `<` chevron from two lines.
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, kChevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, kChevron);
+    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
+    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
 }
 
 void TicTacToeScene::drawScoreboard(Canvas& canvas) const {
@@ -162,12 +162,12 @@ void TicTacToeScene::drawScoreboard(Canvas& canvas) const {
     constexpr float tabH = 52.0F;
     const float tabX = (layout::kWidthF - tabW) / 2.0F;
     const float tabY = kPanelY - 34.0F;
-    canvas.fillRoundedRect(tabX, tabY, tabW, tabH, 16.0F, rgb(92, 68, 68));
+    canvas.fillRoundedRect(tabX, tabY, tabW, tabH, 16.0F, theme().tttTab);
     // Label sits above the panel's top edge so the panel doesn't cover it.
     canvas.textCentered(label(difficulty_), layout::kWidthF / 2.0F, kPanelY - 14.0F, 24.0F,
                         colors::text);
 
-    canvas.fillRoundedRect(kPanelX, kPanelY, kPanelW, kPanelH, 22.0F, colors::panelBrown);
+    canvas.fillRoundedRect(kPanelX, kPanelY, kPanelW, kPanelH, 22.0F, theme().tttPanel);
 
     const float youCx = kPanelX + 84.0F;
     const float botCx = kPanelX + kPanelW - 84.0F;
@@ -187,10 +187,10 @@ void TicTacToeScene::drawGrid(Canvas& canvas) {
         const float offset = static_cast<float>(i) * kCell;
         // Vertical line (overshoots top and bottom).
         canvas.line(kGridX + offset, kGridY - kGridOvershoot, kGridX + offset,
-                    kGridY + kGridSize + kGridOvershoot, kGridThickness, colors::gridBlack);
+                    kGridY + kGridSize + kGridOvershoot, kGridThickness, theme().tttGridLine);
         // Horizontal line (overshoots left and right).
         canvas.line(kGridX - kGridOvershoot, kGridY + offset, kGridX + kGridSize + kGridOvershoot,
-                    kGridY + offset, kGridThickness, colors::gridBlack);
+                    kGridY + offset, kGridThickness, theme().tttGridLine);
     }
 }
 
@@ -213,7 +213,7 @@ void TicTacToeScene::drawMarks(Canvas& canvas) const {
         } else {
             constexpr float outer = kCell * 0.34F;
             canvas.fillCircle(cx, cy, outer, colors::botCyan);
-            canvas.fillCircle(cx, cy, outer - 18.0F, colors::coral);
+            canvas.fillCircle(cx, cy, outer - 18.0F, theme().tttBg);
         }
     }
 }
@@ -226,7 +226,7 @@ void TicTacToeScene::drawOverlay(Canvas& canvas) const {
 }
 
 void TicTacToeScene::render(Canvas& canvas) {
-    canvas.clear(colors::coral);
+    canvas.clear(theme().tttBg);
     drawBackButton(canvas);
     drawScoreboard(canvas);
     drawGrid(canvas);

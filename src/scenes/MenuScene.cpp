@@ -4,8 +4,10 @@
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
+#include "core/Theme.hpp"
 #include "games/GameRegistry.hpp"
 #include "scenes/DifficultySelectScene.hpp"
+#include "scenes/SettingsScene.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -18,7 +20,9 @@ namespace {
 
 // ---- Fixed top bar -------------------------------------------------------
 constexpr float kTopBarH = 96.0F;
-constexpr Color kBarLine = rgb(226, 206, 180); // separator under the white bar
+// Tapping the left of the bar (the hamburger) opens Settings; the region is
+// padded out to a comfortable touch target around the small icon.
+constexpr float kMenuHitW = 140.0F;
 
 // ---- Card grid (laid out in content space, scrolled by scrollY_) ---------
 constexpr float kCardW = 300.0F;
@@ -28,8 +32,6 @@ constexpr float kGridW = (2.0F * kCardW) + kGap;
 constexpr float kGridX = (layout::kWidthF - kGridW) / 2.0F;
 constexpr float kFirstRowY = kTopBarH + 36.0F; // top of the first row, content space
 constexpr float kBottomPad = 36.0F;            // breathing room past the last row
-constexpr Color kCardFill = rgb(40, 38, 52);
-constexpr Color kCardPressed = rgb(58, 55, 74);
 
 // A press may drift this far and still count as a tap; beyond it, it's a scroll.
 constexpr float kTapSlop = 18.0F;
@@ -58,9 +60,10 @@ void drawSoonBadge(Canvas& canvas, float cardX, float cardY, Color accent) {
 }
 
 void drawTopBar(Canvas& canvas) {
-    canvas.fillRect(0.0F, 0.0F, layout::kWidthF, kTopBarH, colors::white);
-    canvas.fillRect(0.0F, kTopBarH, layout::kWidthF, 3.0F, kBarLine);
-    // Placeholder menu button: three short rounded bars (a "hamburger") at left.
+    canvas.fillRect(0.0F, 0.0F, layout::kWidthF, kTopBarH, theme().topBar);
+    canvas.fillRect(0.0F, kTopBarH, layout::kWidthF, 3.0F, theme().barLine);
+    // Menu button: three short rounded bars (a "hamburger") at left; tapping it
+    // opens Settings (handled in handleInput).
     constexpr float kLineW = 56.0F;
     constexpr float kLineH = 9.0F;
     constexpr float kLineGap = 12.0F;
@@ -114,11 +117,13 @@ void MenuScene::handleInput(const PointerEvent& event) {
         // Any touch halts an in-progress glide (like Android: catch to stop).
         velocityY_ = 0.0F;
         dragAccumY_ = 0.0F;
+        menuButtonPressed_ = false;
         // The fixed top bar swallows its own touches; the grid never scrolls
-        // from there (and the placeholder menu button does nothing for now).
+        // from there. A press on the left (hamburger) arms the Settings button.
         if (event.y < kTopBarH) {
             gestureActive_ = false;
             pressedIndex_ = -1;
+            menuButtonPressed_ = hitTest(event, 0.0F, 0.0F, kMenuHitW, kTopBarH);
             return;
         }
         gestureActive_ = true;
@@ -144,6 +149,14 @@ void MenuScene::handleInput(const PointerEvent& event) {
         return;
     }
     case PointerEvent::Phase::Up:
+        // A press-and-release on the hamburger opens Settings.
+        if (menuButtonPressed_) {
+            menuButtonPressed_ = false;
+            if (hitTest(event, 0.0F, 0.0F, kMenuHitW, kTopBarH)) {
+                manager_.push(std::make_unique<SettingsScene>(manager_));
+            }
+            return;
+        }
         if (gestureActive_ && !gestureScrolled_ && pressedIndex_ >= 0 &&
             cardAt(event) == pressedIndex_) {
             openCard(cards_[static_cast<std::size_t>(pressedIndex_)]);
@@ -190,7 +203,7 @@ void MenuScene::update(float dtSeconds) {
 }
 
 void MenuScene::render(Canvas& canvas) {
-    canvas.clear(colors::cream);
+    canvas.clear(theme().menuBg);
 
     // Cards scroll under the bar; they're drawn first so the opaque bar (drawn
     // last) covers anything that has scrolled up into its area.
@@ -202,14 +215,14 @@ void MenuScene::render(Canvas& canvas) {
         }
         const bool pressed = std::cmp_equal(i, pressedIndex_);
         canvas.fillRoundedRect(card.x, y, card.w, card.h, 28.0F,
-                               pressed ? kCardPressed : kCardFill);
+                               pressed ? theme().cardPressed : theme().cardFill);
         // Title (top-left) in the game's accent, with a short underline bar.
         canvas.text(card.info.title, card.x + 28.0F, y + 28.0F, 34.0F, card.info.accent,
                     Canvas::Align::Left);
         canvas.fillRoundedRect(card.x + 28.0F, y + 78.0F, 84.0F, 8.0F, 4.0F, card.info.accent);
         // Large emoji icon centered in the lower part of the card.
         canvas.textCentered(card.info.emoji, card.x + (card.w / 2.0F), y + (card.h * 0.62F), 150.0F,
-                            colors::text);
+                            theme().primaryText);
         if (!card.info.create) {
             drawSoonBadge(canvas, card.x, y, card.info.accent);
         }

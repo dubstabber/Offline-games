@@ -38,8 +38,12 @@ add_library(engine STATIC
     src/core/SceneManager.cpp
     src/core/FontManager.cpp
     src/core/Canvas.cpp
+    src/core/Settings.cpp
+    src/core/Theme.cpp
     src/ui/Button.cpp
     src/ui/Label.cpp
+    src/ui/Toggle.cpp
+    src/ui/Slider.cpp
     src/games/GameRegistry.cpp
     src/games/tictactoe/TicTacToeBoard.cpp
     src/games/tictactoe/TicTacToeBot.cpp
@@ -47,7 +51,8 @@ add_library(engine STATIC
     src/games/tapmatch/TapMatchBoard.cpp
     src/games/tapmatch/TapMatchScene.cpp
     src/scenes/DifficultySelectScene.cpp
-    src/scenes/MenuScene.cpp)
+    src/scenes/MenuScene.cpp
+    src/scenes/SettingsScene.cpp)
 target_include_directories(engine PUBLIC src)
 target_link_libraries(engine
     PUBLIC SDL3::SDL3 SDL3_ttf::SDL3_ttf

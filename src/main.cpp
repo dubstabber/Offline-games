@@ -1,4 +1,5 @@
 #include "core/App.hpp"
+#include "core/Settings.hpp"
 #include "scenes/MenuScene.hpp"
 
 #include <memory>
@@ -12,6 +13,9 @@ int main(int /*argc*/, char* /*argv*/[]) {
     if (!app.init()) {
         return 1;
     }
+    // Force the one-time load now (after SDL_Init) so the first frame already
+    // reflects the saved theme/options instead of loading lazily mid-render.
+    (void)og::settings();
     app.scenes().push(std::make_unique<og::MenuScene>(app.scenes()));
     app.scenes().applyPending();
     app.run();

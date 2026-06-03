@@ -11,3 +11,7 @@ add_test(NAME tictactoe_bot COMMAND test_tictactoe_bot)
 add_executable(test_tapmatch test_tapmatch.cpp)
 target_link_libraries(test_tapmatch PRIVATE engine)
 add_test(NAME tapmatch COMMAND test_tapmatch)
+
+add_executable(test_settings test_settings.cpp)
+target_link_libraries(test_settings PRIVATE engine)
+add_test(NAME settings COMMAND test_settings)

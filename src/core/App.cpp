@@ -2,6 +2,8 @@
 
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
+#include "core/Settings.hpp"
+#include "core/Theme.hpp"
 
 namespace og {
 namespace {
@@ -117,8 +119,10 @@ void App::run() {
     }
     running_ = true;
     Uint64 previousTicks = SDL_GetTicks();
+    const Uint64 perfFreq = SDL_GetPerformanceFrequency();
 
     while (running_ && !scenes_.empty()) {
+        const Uint64 frameStart = SDL_GetPerformanceCounter();
         const Uint64 nowTicks = SDL_GetTicks();
         const float dtSeconds = static_cast<float>(nowTicks - previousTicks) / 1000.0F;
         previousTicks = nowTicks;
@@ -127,13 +131,25 @@ void App::run() {
 
         if (Scene* scene = scenes_.current()) {
             scene->update(dtSeconds);
-            canvas_->clear(colors::background);
+            canvas_->clear(theme().appBg);
             scene->render(*canvas_);
             SDL_RenderPresent(renderer_.get());
         }
 
         scenes_.applyPending();
-        SDL_Delay(8); // cap to ~120 FPS; keeps phone CPU/battery use low
+
+        // Frame cap driven by the Maximum FPS setting (always a valid stop, so
+        // never zero). Sleep only the time left in this frame's budget, measured
+        // against a high-resolution counter so a slow frame doesn't over-sleep.
+        const Uint64 frameTicks = perfFreq / static_cast<Uint64>(settings().maxFps);
+        const Uint64 frameEnd = frameStart + frameTicks;
+        const Uint64 afterFrame = SDL_GetPerformanceCounter();
+        if (afterFrame < frameEnd) {
+            const auto ms = static_cast<Uint32>(((frameEnd - afterFrame) * 1000) / perfFreq);
+            if (ms > 0) {
+                SDL_Delay(ms);
+            }
+        }
     }
 }
 

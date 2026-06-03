@@ -4,6 +4,7 @@
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
+#include "core/Theme.hpp"
 
 #include <array>
 #include <cstddef>
@@ -17,7 +18,6 @@ namespace {
 constexpr float kBackCx = 92.0F;
 constexpr float kBackCy = 100.0F;
 constexpr float kBackRadius = 56.0F;
-constexpr Color kChevron = rgb(176, 124, 162);
 
 // ---- Board: a fixed fine grid mapped to pixels (16x22 cells) ----------------
 constexpr float kFineCell = 38.0F;       // one fine grid cell
@@ -210,15 +210,15 @@ const char* TapMatchScene::resultText() const {
 }
 
 void TapMatchScene::drawBackButton(Canvas& canvas) {
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, colors::white);
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, kChevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, kChevron);
+    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
+    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
+    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
 }
 
 void TapMatchScene::drawTopBar(Canvas& canvas) const {
     drawBackButton(canvas);
-    canvas.textCentered("Tap Match", layout::kWidthF / 2.0F, 92.0F, 52.0F, colors::white);
-    canvas.textCentered(statusText(), layout::kWidthF / 2.0F, 150.0F, 28.0F, rgb(235, 198, 208));
+    canvas.textCentered("Tap Match", layout::kWidthF / 2.0F, 92.0F, 52.0F, theme().primaryText);
+    canvas.textCentered(statusText(), layout::kWidthF / 2.0F, 150.0F, 28.0F, theme().tmStatusText);
 }
 
 void TapMatchScene::drawBoard(Canvas& canvas) const {
@@ -235,22 +235,21 @@ void TapMatchScene::drawBoard(Canvas& canvas) const {
         // A grey border (slightly larger) separates overlapping tiles, then the
         // card itself (white & raised when free, grey when covered).
         canvas.fillRoundedRect(x + kTileInset - 2.0F, y + kTileInset - 2.0F, cardW + 4.0F,
-                               cardW + 4.0F, kTileRadius + 2.0F, colors::tapMatchTileEdge);
+                               cardW + 4.0F, kTileRadius + 2.0F, theme().tmTileEdge);
         canvas.fillRoundedRect(x + kTileInset, y + kTileInset, cardW, cardW, kTileRadius,
-                               accessible ? colors::tapMatchTileLight : colors::tapMatchTileDim);
+                               accessible ? theme().tmTileLight : theme().tmTileDim);
         canvas.emojiCentered(emojiFor(tile.icon), x + (kTilePx / 2.0F), y + (kTilePx / 2.0F),
                              kEmojiPx);
     }
 }
 
 void TapMatchScene::drawHolder(Canvas& canvas) const {
-    canvas.fillRoundedRect(kHolderX, kHolderY, kHolderW, kHolderH, kHolderRadius,
-                           colors::tapMatchHolder);
+    canvas.fillRoundedRect(kHolderX, kHolderY, kHolderW, kHolderH, kHolderRadius, theme().tmHolder);
     const float slotW = (kHolderW - (2.0F * kSlotPad) - (6.0F * kSlotGap)) / 7.0F;
     const float slotY = kHolderY + ((kHolderH - kSlotH) / 2.0F);
     for (int i = 0; i < TapMatchBoard::kHolderCapacity; ++i) {
         const float sx = kHolderX + kSlotPad + (static_cast<float>(i) * (slotW + kSlotGap));
-        canvas.fillRoundedRect(sx, slotY, slotW, kSlotH, 16.0F, colors::tapMatchSlot);
+        canvas.fillRoundedRect(sx, slotY, slotW, kSlotH, 16.0F, theme().tmSlot);
     }
     const std::vector<int>& held = board_.holder();
     for (std::size_t i = 0;
@@ -269,7 +268,7 @@ void TapMatchScene::drawOverlay(Canvas& canvas) const {
 }
 
 void TapMatchScene::render(Canvas& canvas) {
-    canvas.clear(colors::tapMatchMaroon);
+    canvas.clear(theme().tmBg);
     drawTopBar(canvas);
     drawBoard(canvas);
     drawHolder(canvas);

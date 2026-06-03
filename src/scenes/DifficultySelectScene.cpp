@@ -4,6 +4,7 @@
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
+#include "core/Theme.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -16,7 +17,6 @@ namespace {
 constexpr float kBackCx = 92.0F;
 constexpr float kBackCy = 100.0F;
 constexpr float kBackRadius = 56.0F;
-constexpr Color kChevron = rgb(176, 124, 162);
 
 // ---- Slider --------------------------------------------------------------
 constexpr float kTrackX = 160.0F;
@@ -24,7 +24,6 @@ constexpr float kTrackW = 400.0F;
 constexpr float kTrackCy = 820.0F;
 constexpr float kTrackH = 28.0F;
 constexpr float kKnobRadius = 34.0F;
-constexpr Color kTrackBg = rgb(225, 210, 190);
 
 // ---- PLAY button ---------------------------------------------------------
 constexpr float kPlayW = 400.0F;
@@ -33,7 +32,6 @@ constexpr float kPlayX = (layout::kWidthF - kPlayW) / 2.0F;
 constexpr float kPlayY = 1020.0F;
 
 constexpr float kDescMaxWidth = 600.0F;
-constexpr Color kDescColor = rgb(96, 84, 80);
 
 const char* faceFor(Difficulty difficulty) {
     switch (difficulty) {
@@ -178,21 +176,21 @@ void DifficultySelectScene::dragKnobTo(float x) {
 void DifficultySelectScene::update(float /*dtSeconds*/) {}
 
 void DifficultySelectScene::render(Canvas& canvas) {
-    canvas.clear(colors::cream);
+    canvas.clear(theme().menuBg);
 
     // Back button.
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, colors::white);
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, kChevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, kChevron);
+    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
+    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
+    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
 
-    canvas.textCentered(titleUpper_, layout::kWidthF / 2.0F, 150.0F, 64.0F, colors::gridBlack);
+    canvas.textCentered(titleUpper_, layout::kWidthF / 2.0F, 150.0F, 64.0F, theme().titleText);
 
     if (descLines_.empty()) {
         descLines_ = wrapText(canvas, info_.description, 30.0F, kDescMaxWidth);
     }
     float descY = 240.0F;
     for (const std::string& descLine : descLines_) {
-        canvas.textCentered(descLine, layout::kWidthF / 2.0F, descY, 30.0F, kDescColor);
+        canvas.textCentered(descLine, layout::kWidthF / 2.0F, descY, 30.0F, theme().mutedText);
         descY += 44.0F;
     }
 
@@ -203,7 +201,7 @@ void DifficultySelectScene::render(Canvas& canvas) {
 
     // Slider: background track, coloured fill up to the knob, then the knob.
     canvas.fillRoundedRect(kTrackX, kTrackCy - (kTrackH / 2.0F), kTrackW, kTrackH, kTrackH / 2.0F,
-                           kTrackBg);
+                           theme().sliderTrack);
     const float knobX = draggingKnob_ ? knobX_ : stopX(difficulty_);
     canvas.fillRoundedRect(kTrackX, kTrackCy - (kTrackH / 2.0F), knobX - kTrackX, kTrackH,
                            kTrackH / 2.0F, color(difficulty_));
