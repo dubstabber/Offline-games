@@ -44,7 +44,8 @@ public:
     // Knobs that shape a generated board. Difficulty maps to one of these in the
     // scene. tileCount must be a multiple of kGroupSize and iconVariety in
     // [1, kMaxIcons]; holderBudget is the largest holder fill the generator's own
-    // solution is allowed to use (<= kHolderCapacity).
+    // solution parks at (clamped to < kHolderCapacity, since filling the last slot
+    // with no triple now loses).
     struct GenParams {
         int iconVariety = 6;
         int layers = 3;

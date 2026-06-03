@@ -57,6 +57,7 @@ constexpr float kFlyPxPerSec = 2600.0F;
 constexpr float kFlyMin = 0.16F;
 constexpr float kFlyMax = 0.40F;
 constexpr float kSlideRate = 19.0F; // holder reflow: exp slide toward each slot
+constexpr float kClearHold = 0.10F; // show the completed triple before it pops
 constexpr float kClearDur = 0.42F;  // matched fruit: pop then shrink-and-vanish
 // Board intro: tiles fly in from the corners, staggered by layer.
 constexpr float kIntroDur = 0.30F;
@@ -140,7 +141,7 @@ constexpr float kHolderRowCy = kHolderY + (kHolderH / 2.0F);
         return {.iconVariety = 8,
                 .layers = 3,
                 .tileCount = 54,
-                .holderBudget = 7,
+                .holderBudget = 6,
                 .gridWidth = 16,
                 .gridHeight = 22,
                 .clusters = 4};
@@ -274,11 +275,11 @@ void TapMatchScene::enterGameOver() {
 void TapMatchScene::resetFx() {
     tray_.clear();
     flying_.clear();
-    clearing_.clear();
     sparks_.clear();
     introClock_ = 0.0F;
     nextUid_ = 1;
     wonPending_ = false;
+    losePending_ = false;
     int maxLayer = 0;
     for (const auto& tile : board_.tiles()) {
         maxLayer = std::max(maxLayer, tile.layer);
@@ -311,9 +312,11 @@ void TapMatchScene::spawnSparks(float x, float y) {
     }
 }
 
-// Tap a board tile and spawn the fruit's flight to the holder. The board model
-// updates instantly; tray_/clearing_ animate that change. board_.holder() is the
-// source of truth for grouping, so it's queried *before* the tap.
+// Tap a board tile and fly its fruit to the holder. The board model updates
+// instantly; tray_ animates that change. board_.holder() is queried *before* the
+// tap (it's the source of truth for grouping). The third of a match flies in and
+// settles into its slot like any other fruit — so the holder shows the completed
+// triple — and only then do the three pop out (see maybeStartClear).
 void TapMatchScene::startTap(int id) {
     const TapMatchBoard::Tile& tile = board_.tiles().at(static_cast<std::size_t>(id));
     const int icon = tile.icon;
@@ -331,58 +334,54 @@ void TapMatchScene::startTap(int id) {
     if (!board_.tapTile(id)) {
         return;
     }
-    if (board_.result() == TapMatchBoard::Result::Lost) {
-        enterGameOver();
-        return;
+
+    // If the holder's visuals are full of still-popping fruit (a fast tap during
+    // another match's pop), snap those away so the new fruit has a free slot.
+    if (tray_.size() >= static_cast<std::size_t>(kSlots)) {
+        std::erase_if(flying_, [this](const FlyTile& f) {
+            const int idx = trayIndexOf(f.uid);
+            return idx >= 0 && tray_.at(static_cast<std::size_t>(idx)).pending;
+        });
+        std::erase_if(tray_, [](const TrayTile& t) { return t.pending; });
     }
 
-    // Destination slot = where this icon groups in the tray (first match, or end).
+    // Destination slot = group with this icon's active (non-pending) fruit, or end.
     int slot = static_cast<int>(tray_.size());
     for (std::size_t i = 0; i < tray_.size(); ++i) {
-        if (tray_.at(i).icon == icon) {
+        const TrayTile& t = tray_.at(i);
+        if (t.icon == icon && !t.pending) {
             slot = static_cast<int>(i);
             break;
         }
     }
-    const float destX = slotCenterX(slot);
-
-    FlyTile fly{};
-    fly.icon = icon;
-    fly.x0 = cx;
-    fly.y0 = cy;
-    fly.size0 = kEmojiPx;
-    fly.dur = flyDuration(cx, cy, destX, kHolderRowCy);
+    const int uid = nextUid_++;
+    tray_.insert(tray_.begin() + slot, TrayTile{.uid = uid,
+                                                .icon = icon,
+                                                .x = slotCenterX(slot),
+                                                .arriving = true,
+                                                .pending = willTriple,
+                                                .clear = -1.0F});
+    flying_.push_back(FlyTile{.uid = uid,
+                              .icon = icon,
+                              .x0 = cx,
+                              .y0 = cy,
+                              .size0 = kEmojiPx,
+                              .t = 0.0F,
+                              .dur = flyDuration(cx, cy, slotCenterX(slot), kHolderRowCy)});
 
     if (willTriple) {
-        // Park the two existing same-icon fruit as clears that hold until the 3rd
-        // lands, collapse the tray now, and let the 3rd burst on arrival.
-        float sumX = destX;
-        int count = 1;
-        for (auto it = tray_.begin(); it != tray_.end();) {
-            if (it->icon != icon) {
-                ++it;
-                continue;
+        // The two existing fruit of this icon leave with the match too.
+        for (TrayTile& t : tray_) {
+            if (t.icon == icon && !t.pending) {
+                t.pending = true;
             }
-            clearing_.push_back(
-                {.icon = icon, .x = it->x, .y = kHolderRowCy, .wait = fly.dur, .age = 0.0F});
-            sumX += it->x;
-            ++count;
-            std::erase_if(flying_,
-                          [uid = it->uid](const FlyTile& f) { return !f.triple && f.uid == uid; });
-            it = tray_.erase(it);
         }
-        fly.triple = true;
-        fly.targetX = sumX / static_cast<float>(count);
-        fly.targetY = kHolderRowCy;
-    } else {
-        const TrayTile arriving{.uid = nextUid_++, .icon = icon, .x = destX, .arriving = true};
-        tray_.insert(tray_.begin() + slot, arriving);
-        fly.uid = arriving.uid;
     }
-    flying_.push_back(fly);
 
     if (board_.result() == TapMatchBoard::Result::Won) {
         wonPending_ = true; // defer the overlay until the last match finishes
+    } else if (board_.result() == TapMatchBoard::Result::Lost) {
+        losePending_ = true; // let the fruit land in the last slot, then game over
     }
 }
 
@@ -392,41 +391,40 @@ void TapMatchScene::advanceFx(float dtSeconds) {
     }
     introClock_ += dtSeconds;
 
-    // Flights: advance, and on landing either settle a tray fruit or burst a match.
+    // Flights: advance; on landing the fruit settles into its slot, and if that
+    // completes a match (all three landed) the group starts popping.
     for (auto it = flying_.begin(); it != flying_.end();) {
         it->t += dtSeconds;
         if (it->t < it->dur) {
             ++it;
             continue;
         }
-        if (it->triple) {
-            clearing_.push_back(
-                {.icon = it->icon, .x = it->targetX, .y = it->targetY, .wait = 0.0F, .age = 0.0F});
-            spawnSparks(it->targetX, it->targetY);
-        } else {
-            const int idx = trayIndexOf(it->uid);
-            if (idx >= 0) {
-                tray_.at(static_cast<std::size_t>(idx)).arriving = false;
-            }
+        const int idx = trayIndexOf(it->uid);
+        if (idx >= 0) {
+            tray_.at(static_cast<std::size_t>(idx)).arriving = false;
+            maybeStartClear(it->icon);
         }
         it = flying_.erase(it);
     }
 
-    // Holder reflow: slide each fruit toward its slot.
+    // Holder reflow: slide each fruit toward its slot. Popping fruit hold their
+    // slot until removed, so the tray only collapses once a match has finished.
     const float slide = 1.0F - std::exp(-kSlideRate * dtSeconds);
     for (std::size_t i = 0; i < tray_.size(); ++i) {
         TrayTile& tile = tray_.at(i);
         tile.x += (slotCenterX(static_cast<int>(i)) - tile.x) * slide;
     }
 
-    // Clears: hold (until the 3rd lands), then pop and shrink; drop when done.
-    for (auto it = clearing_.begin(); it != clearing_.end();) {
-        it->age += dtSeconds;
-        if ((it->age - it->wait) >= kClearDur) {
-            it = clearing_.erase(it);
-        } else {
-            ++it;
+    // Pops: advance the clear timer and drop fully-popped fruit (tray collapses).
+    for (auto it = tray_.begin(); it != tray_.end();) {
+        if (it->clear >= 0.0F) {
+            it->clear += dtSeconds;
+            if (it->clear >= kClearHold + kClearDur) {
+                it = tray_.erase(it);
+                continue;
+            }
         }
+        ++it;
     }
 
     // Sparks: fly out and decelerate, then expire.
@@ -444,10 +442,42 @@ void TapMatchScene::advanceFx(float dtSeconds) {
         ++it;
     }
 
-    if (wonPending_ && flying_.empty() && clearing_.empty()) {
+    // Show the result overlay once the final fruit has landed and any match has
+    // finished popping (a win clears the board; a loss fills the last slot).
+    if ((wonPending_ || losePending_) && flying_.empty() && !anyPending()) {
         wonPending_ = false;
+        losePending_ = false;
         enterGameOver();
     }
+}
+
+// Start a match's pop once all three of `icon`'s pending fruit have landed: the
+// holder has shown the completed triple, now burst it.
+void TapMatchScene::maybeStartClear(int icon) {
+    float sumX = 0.0F;
+    int count = 0;
+    for (const TrayTile& tile : tray_) {
+        if (tile.icon == icon && tile.pending && tile.clear < 0.0F) {
+            if (tile.arriving) {
+                return; // a member of this match is still in flight
+            }
+            sumX += tile.x;
+            ++count;
+        }
+    }
+    if (count == 0) {
+        return;
+    }
+    for (TrayTile& tile : tray_) {
+        if (tile.icon == icon && tile.pending && tile.clear < 0.0F) {
+            tile.clear = 0.0F;
+        }
+    }
+    spawnSparks(sumX / static_cast<float>(count), kHolderRowCy);
+}
+
+bool TapMatchScene::anyPending() const {
+    return std::ranges::any_of(tray_, [](const TrayTile& t) { return t.pending; });
 }
 
 std::string TapMatchScene::statusText() const {
@@ -516,21 +546,20 @@ void TapMatchScene::drawHolder(Canvas& canvas) {
     }
 }
 
-// The held fruit (animated x as the tray reflows) and the matched fruit popping
-// out. Drawn above the holder slots but below the in-flight fruit.
+// The held fruit (animated x as the tray reflows), including a completing triple
+// held at full size for a beat before it pops and shrinks out. Drawn above the
+// holder slots but below the in-flight fruit.
 void TapMatchScene::drawTray(Canvas& canvas) const {
     for (const TrayTile& tile : tray_) {
         if (tile.arriving) {
             continue; // still drawn by its flight until it lands
         }
-        canvas.emojiCentered(emojiFor(tile.icon), tile.x, kHolderRowCy, kHolderEmoji);
-    }
-    for (const ClearTile& clear : clearing_) {
-        const float scale = (clear.age <= clear.wait)
-                                ? 1.0F
-                                : clearScale(clampUnit((clear.age - clear.wait) / kClearDur));
+        float scale = 1.0F;
+        if (tile.clear >= kClearHold) {
+            scale = clearScale(clampUnit((tile.clear - kClearHold) / kClearDur));
+        }
         if (scale > 0.02F) {
-            canvas.emojiCentered(emojiFor(clear.icon), clear.x, clear.y, kHolderEmoji * scale);
+            canvas.emojiCentered(emojiFor(tile.icon), tile.x, kHolderRowCy, kHolderEmoji * scale);
         }
     }
 }
@@ -540,16 +569,12 @@ void TapMatchScene::drawTray(Canvas& canvas) const {
 void TapMatchScene::drawFlying(Canvas& canvas) const {
     for (const FlyTile& fly : flying_) {
         const float p = clampUnit(fly.t / fly.dur);
-        float tx = fly.targetX;
-        float ty = fly.targetY;
-        if (!fly.triple) {
-            const int idx = trayIndexOf(fly.uid);
-            tx = (idx >= 0) ? slotCenterX(idx) : fly.x0; // retarget as the tray reflows
-            ty = kHolderRowCy;
-        }
+        const int idx = trayIndexOf(fly.uid);
+        const float tx = (idx >= 0) ? slotCenterX(idx) : fly.x0; // retarget as the tray reflows
         const float e = easeOutQuad(p);
         const float size = lerp(fly.size0, kHolderEmoji, easeOutBack(p)); // slight landing pop
-        canvas.emojiCentered(emojiFor(fly.icon), lerp(fly.x0, tx, e), lerp(fly.y0, ty, e), size);
+        canvas.emojiCentered(emojiFor(fly.icon), lerp(fly.x0, tx, e), lerp(fly.y0, kHolderRowCy, e),
+                             size);
     }
 }
 

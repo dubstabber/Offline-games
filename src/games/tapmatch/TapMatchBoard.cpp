@@ -129,7 +129,10 @@ TapMatchBoard::TapMatchBoard(const GenParams& params, std::uint64_t seed) : para
     params_.layers = std::max(1, params_.layers);
     params_.gridWidth = std::max(kTileSpan + 1, params_.gridWidth);
     params_.gridHeight = std::max(kTileSpan + 1, params_.gridHeight);
-    params_.holderBudget = clampInt(params_.holderBudget, kGroupSize, kHolderCapacity);
+    // Cap below capacity: a solvable peel order must keep a slot free to complete
+    // its next triple, so it never parks tiles all the way to kHolderCapacity (that
+    // now loses). The 7th slot only ever fills transiently mid-triple.
+    params_.holderBudget = clampInt(params_.holderBudget, kGroupSize, kHolderCapacity - 1);
     params_.tileCount = std::max(kGroupSize, params_.tileCount);
     params_.clusters = clampInt(params_.clusters, 1, 4);
 
@@ -326,14 +329,13 @@ bool TapMatchBoard::simulateSolutionWins() const {
         }
         int& c = held.at(static_cast<std::size_t>(icon));
         const bool completesTriple = c == (kGroupSize - 1);
-        if (holderSize == kHolderCapacity && !completesTriple) {
-            return false; // this tap would overflow the holder -> not a win
-        }
         ++c;
         ++holderSize;
         if (completesTriple) {
             c = 0;
             holderSize -= kGroupSize;
+        } else if (holderSize == kHolderCapacity) {
+            return false; // a non-clearing tap fills the holder -> this order loses
         }
     }
     return holderSize == 0; // the whole board cleared
@@ -363,13 +365,6 @@ bool TapMatchBoard::tapTile(int id) {
     auto& held = heldCount_.at(static_cast<std::size_t>(icon));
     const bool completesTriple = held == (kGroupSize - 1); // a third of this icon
 
-    // Holder full and this tile can't complete a triple: there's no room for it,
-    // so the tap loses. Board and holder are frozen at the moment of defeat.
-    if (holderSize_ == kHolderCapacity && !completesTriple) {
-        result_ = Result::Lost;
-        return true;
-    }
-
     // Leave the board; uncover the tiles this one was sitting on.
     t.removed = true;
     --remaining_;
@@ -387,8 +382,14 @@ bool TapMatchBoard::tapTile(int id) {
         std::erase(holder_, icon);
     }
 
+    // Win when the board is clear; otherwise lose the instant the holder fills up
+    // with no triple to clear it — there is no room for another tile, so you can't
+    // tap your way out of a full holder (a triple can only complete while a slot is
+    // still free, filling to 7 then clearing back down).
     if (remaining_ == 0) {
         result_ = Result::Won;
+    } else if (holderSize_ == kHolderCapacity) {
+        result_ = Result::Lost;
     }
     return true;
 }

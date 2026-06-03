@@ -51,33 +51,26 @@ private:
     void drawOverlay(Canvas& canvas) const;
 
     // ---- Animation/VFX (a visual layer over the pure, instant board) --------
-    // A settled fruit sitting in the holder; tray_ mirrors board_.holder().
+    // A fruit in the holder. The active (non-pending) tiles mirror board_.holder();
+    // a completing triple's three tiles stay in the tray as `pending` (no longer
+    // grouped) so the holder briefly shows the finished triple, then they pop out.
     struct TrayTile {
         int uid = 0;
         int icon = 0;
         float x = 0.0F;        // animated slot-centre x (slides on reflow)
         bool arriving = false; // true while a FlyTile is still delivering it
+        bool pending = false;  // part of a completing triple: logically gone
+        float clear = -1.0F;   // <0 = not popping; else pop age (hold, then shrink)
     };
-    // A fruit mid-flight from its board tile to the holder.
+    // A fruit mid-flight from its board tile to the holder slot of its tray tile.
     struct FlyTile {
+        int uid = 0; // the tray tile it delivers
         int icon = 0;
         float x0 = 0.0F; // start centre (the board tile)
         float y0 = 0.0F;
         float size0 = 0.0F;
         float t = 0.0F;
         float dur = 0.0F;
-        bool triple = false;  // on landing: burst a match (true) vs settle (false)
-        int uid = 0;          // tray tile it delivers when !triple
-        float targetX = 0.0F; // fixed landing point when triple
-        float targetY = 0.0F;
-    };
-    // A matched fruit popping and shrinking out of the holder.
-    struct ClearTile {
-        int icon = 0;
-        float x = 0.0F;
-        float y = 0.0F;
-        float wait = 0.0F; // hold still this long (until the 3rd lands), then pop
-        float age = 0.0F;
     };
     // A spark in the match burst.
     struct Spark {
@@ -91,8 +84,10 @@ private:
 
     void resetFx(); // clear all animation state, restart the intro
     [[nodiscard]] bool introActive() const;
-    void startTap(int id);           // tap the board tile and spawn its animations
-    void advanceFx(float dtSeconds); // advance flights, reflow, clears, sparks
+    void startTap(int id);                 // tap the board tile and spawn its animations
+    void advanceFx(float dtSeconds);       // advance flights, reflow, pops, sparks
+    void maybeStartClear(int icon);        // pop a triple once all three have landed
+    [[nodiscard]] bool anyPending() const; // a match is still animating out
     [[nodiscard]] int trayIndexOf(int uid) const;
     void spawnSparks(float x, float y);
 
@@ -104,14 +99,14 @@ private:
     Button homeButton_;
     Button playAgainButton_;
 
-    std::vector<TrayTile> tray_;      // holder fruit (mirrors board_.holder())
-    std::vector<FlyTile> flying_;     // fruit in flight to the holder
-    std::vector<ClearTile> clearing_; // matched fruit popping out
-    std::vector<Spark> sparks_;       // match-burst particles
-    float introClock_ = 0.0F;         // time since the round started (board fly-in)
-    float introEnd_ = 0.0F;           // when the intro finishes (taps unlock)
+    std::vector<TrayTile> tray_;  // holder fruit (settled, arriving, and popping)
+    std::vector<FlyTile> flying_; // fruit in flight to the holder
+    std::vector<Spark> sparks_;   // match-burst particles
+    float introClock_ = 0.0F;     // time since the round started (board fly-in)
+    float introEnd_ = 0.0F;       // when the intro finishes (taps unlock)
     int nextUid_ = 1;
-    bool wonPending_ = false; // board is won; show the overlay once anims settle
+    bool wonPending_ = false;  // board is won; show the overlay once anims settle
+    bool losePending_ = false; // board is lost; let the last fruit land first
 };
 
 } // namespace og

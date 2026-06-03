@@ -30,7 +30,7 @@ const std::array<GenParams, 3> kDifficulties = {
     GenParams{.iconVariety = 8,
               .layers = 3,
               .tileCount = 54,
-              .holderBudget = 7,
+              .holderBudget = 6,
               .gridWidth = 16,
               .gridHeight = 22,
               .clusters = 4},
@@ -192,6 +192,9 @@ void testRandomPlayInvariants() {
 
         int guard = 0;
         while (!board.isOver()) {
+            // While play continues the holder never sits full: filling the last
+            // slot with no triple loses immediately (no "tap your way out").
+            assert(board.holderSize() < TapMatchBoard::kHolderCapacity);
             std::vector<int> accessible;
             for (const auto& tile : board.tiles()) {
                 if (board.isAccessible(tile.id)) {
