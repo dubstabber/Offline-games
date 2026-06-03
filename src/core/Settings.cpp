@@ -115,6 +115,12 @@ std::string serialize(const Settings& settings) {
     out += std::to_string(settings.minesweeperBestMedium);
     out += "\nminesweeperBestHard=";
     out += std::to_string(settings.minesweeperBestHard);
+    out += "\nsnakeBestEasy=";
+    out += std::to_string(settings.snakeBestEasy);
+    out += "\nsnakeBestMedium=";
+    out += std::to_string(settings.snakeBestMedium);
+    out += "\nsnakeBestHard=";
+    out += std::to_string(settings.snakeBestHard);
     out += "\n";
     return out;
 }
@@ -170,6 +176,12 @@ Settings parse(std::string_view text) {
             parseInt(value, settings.minesweeperBestMedium);
         } else if (key == "minesweeperBestHard") {
             parseInt(value, settings.minesweeperBestHard);
+        } else if (key == "snakeBestEasy") {
+            parseInt(value, settings.snakeBestEasy);
+        } else if (key == "snakeBestMedium") {
+            parseInt(value, settings.snakeBestMedium);
+        } else if (key == "snakeBestHard") {
+            parseInt(value, settings.snakeBestHard);
         }
         // Unknown keys are ignored so older/newer files stay forward-compatible.
     }
@@ -188,6 +200,9 @@ Settings parse(std::string_view text) {
     settings.minesweeperBestEasy = std::max(0, settings.minesweeperBestEasy);
     settings.minesweeperBestMedium = std::max(0, settings.minesweeperBestMedium);
     settings.minesweeperBestHard = std::max(0, settings.minesweeperBestHard);
+    settings.snakeBestEasy = std::max(0, settings.snakeBestEasy);
+    settings.snakeBestMedium = std::max(0, settings.snakeBestMedium);
+    settings.snakeBestHard = std::max(0, settings.snakeBestHard);
     return settings;
 }
 

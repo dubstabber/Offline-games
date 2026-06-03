@@ -93,6 +93,24 @@ void testMalformedValueKeepsDefault() {
     assert(nearly(s.volume, def.volume));
 }
 
+// Per-difficulty Snake best scores persist, floor at 0, and survive round-trips.
+void testSnakeBest() {
+    assert(parse("snakeBestEasy=120").snakeBestEasy == 120);
+    assert(parse("snakeBestMedium=4500").snakeBestMedium == 4500);
+    assert(parse("snakeBestHard=77").snakeBestHard == 77);
+    assert(parse("snakeBestEasy=-5").snakeBestEasy == 0); // floor at 0
+    const Settings def;
+    assert(parse("snakeBestHard=nope").snakeBestHard == def.snakeBestHard);
+    Settings s;
+    s.snakeBestEasy = 11;
+    s.snakeBestMedium = 222;
+    s.snakeBestHard = 3333;
+    const Settings back = parse(serialize(s));
+    assert(back.snakeBestEasy == 11);
+    assert(back.snakeBestMedium == 222);
+    assert(back.snakeBestHard == 3333);
+}
+
 // Per-difficulty Tap Match progress persists and is floored at level 1.
 void testTapmatchLevels() {
     assert(parse("tapmatchLevelEasy=7").tapmatchLevelEasy == 7);
@@ -115,6 +133,7 @@ int main() {
     testClampingAndSnapping();
     testMalformedValueKeepsDefault();
     testTapmatchLevels();
+    testSnakeBest();
     std::puts("All Settings tests passed.");
     return 0;
 }

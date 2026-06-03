@@ -40,6 +40,11 @@ struct Settings {
     int minesweeperBestEasy = 0;
     int minesweeperBestMedium = 0;
     int minesweeperBestHard = 0;
+    // Snake best score per difficulty (highest mass the player reached). Shown on
+    // the game-over overlay; each difficulty tracks separately.
+    int snakeBestEasy = 0;
+    int snakeBestMedium = 0;
+    int snakeBestHard = 0;
 };
 
 // Pure and SDL-free (so they are unit-testable): turn Settings into the on-disk

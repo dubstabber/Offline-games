@@ -2,6 +2,7 @@
 
 #include "games/blockfill/BlockFillScene.hpp"
 #include "games/minesweeper/MineSweeperScene.hpp"
+#include "games/snake/SnakeScene.hpp"
 #include "games/tapmatch/TapMatchScene.hpp"
 #include "games/tictactoe/TicTacToeScene.hpp"
 
@@ -69,6 +70,19 @@ const std::vector<GameInfo>& gameRegistry() {
             },
             .currentLevel = [](Difficulty difficulty) { return blockFillSavedLevel(difficulty); },
         });
+        list.push_back(GameInfo{
+            .id = "snake",
+            .title = "Snake",
+            .emoji = "\xF0\x9F\x90\x8D", // 🐍
+            .description = "Glide around the arena, eat orbs to grow longer, and cut off rival "
+                           "snakes so they crash into you. Steer toward your finger; hold BOOST "
+                           "for a burst of speed that bleeds a little length. Hit another snake "
+                           "or the edge and it's over.",
+            .accent = colors::easyGreen,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<SnakeScene>(manager, difficulty);
+            },
+        });
 
         // Placeholder cards for games not built yet: a title/emoji/accent so the
         // menu has something to show and scroll, but no `create` factory, so the
@@ -83,7 +97,6 @@ const std::vector<GameInfo>& gameRegistry() {
                                     .accent = accent,
                                     .create = nullptr});
         };
-        placeholder("snake", "Snake", "\xF0\x9F\x90\x8D", colors::easyGreen);          // 🐍
         placeholder("memory", "Memory", "\xF0\x9F\xA7\xA0", colors::botCyan);          // 🧠
         placeholder("2048", "2048", "\xF0\x9F\x94\xA2", colors::mediumOrange);         // 🔢
         placeholder("connect4", "Connect 4", "\xF0\x9F\x94\xB4", colors::menuPurple);  // 🔴

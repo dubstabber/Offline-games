@@ -36,3 +36,7 @@ target_link_libraries(test_blockfill PRIVATE engine)
 target_compile_definitions(test_blockfill PRIVATE
     BLOCKFILL_LEVELS_PATH="${CMAKE_SOURCE_DIR}/assets/blockfill/levels.bytes")
 add_test(NAME blockfill COMMAND test_blockfill)
+
+add_executable(test_snake test_snake.cpp)
+target_link_libraries(test_snake PRIVATE engine)
+add_test(NAME snake COMMAND test_snake)

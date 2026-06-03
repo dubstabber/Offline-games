@@ -57,6 +57,9 @@ add_library(engine STATIC
     src/games/blockfill/BlockFillBoard.cpp
     src/games/blockfill/BlockFillLevels.cpp
     src/games/blockfill/BlockFillScene.cpp
+    src/games/snake/SnakeWorld.cpp
+    src/games/snake/GhostLeaderboard.cpp
+    src/games/snake/SnakeScene.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
     src/scenes/SettingsScene.cpp)

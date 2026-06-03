@@ -48,6 +48,10 @@ struct Theme {
     // Block Fill.
     Color bfField; // board + screen background (dark; the rope/cells sit on it)
     Color bfCell;  // empty playable cell card (gray)
+
+    // Snake.
+    Color snakeField;  // arena background (the dark "void"; snakes/food sit on it)
+    Color snakeBorder; // world-edge frame marking the death boundary
 };
 
 // Light theme = the project's current colors (verbatim, so default builds look
@@ -87,6 +91,9 @@ inline constexpr Theme kLight{
 
     .bfField = rgb(38, 42, 52), // dark slate field, like the original
     .bfCell = rgb(74, 80, 92),  // mid-gray playable cell
+
+    .snakeField = rgb(18, 20, 28),   // near-black navy void, like the original
+    .snakeBorder = rgb(200, 72, 72), // red death edge
 };
 
 // Dark theme: charcoal chrome with near-white text; each game keeps its hue
@@ -126,6 +133,9 @@ inline constexpr Theme kDark{
 
     .bfField = rgb(22, 24, 30), // darker slate field
     .bfCell = rgb(58, 64, 76),  // gray cell, dimmed for dark mode
+
+    .snakeField = rgb(12, 13, 18),   // even darker void for dark mode
+    .snakeBorder = rgb(168, 58, 58), // dimmer red edge
 };
 
 // The active theme, selected by Settings::darkMode. Scenes call this fresh every
