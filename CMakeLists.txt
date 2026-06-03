@@ -54,6 +54,9 @@ add_library(engine STATIC
     src/games/minesweeper/MineSweeperBoard.cpp
     src/games/minesweeper/MineSweeperSolver.cpp
     src/games/minesweeper/MineSweeperScene.cpp
+    src/games/blockfill/BlockFillBoard.cpp
+    src/games/blockfill/BlockFillLevels.cpp
+    src/games/blockfill/BlockFillScene.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
     src/scenes/SettingsScene.cpp)
@@ -83,6 +86,15 @@ add_custom_command(TARGET offline-games POST_BUILD
             "${CMAKE_SOURCE_DIR}/assets/tapmatch"
             "$<TARGET_FILE_DIR:offline-games>/assets/tapmatch"
     COMMENT "Bundling Tap Match levels next to the executable")
+
+# Ship the Block Fill level data the same way: a binary blob of original boards
+# split into four difficulty pools (see games/blockfill/BlockFillLevels). Data,
+# not an image, so the "no image assets" rule does not apply.
+add_custom_command(TARGET offline-games POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/assets/blockfill"
+            "$<TARGET_FILE_DIR:offline-games>/assets/blockfill"
+    COMMENT "Bundling Block Fill levels next to the executable")
 
 # ---- Tests -------------------------------------------------------------------
 include(CTest)

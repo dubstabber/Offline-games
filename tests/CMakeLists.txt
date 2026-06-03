@@ -27,3 +27,12 @@ add_test(NAME settings COMMAND test_settings)
 add_executable(test_minesweeper test_minesweeper.cpp)
 target_link_libraries(test_minesweeper PRIVATE engine)
 add_test(NAME minesweeper COMMAND test_minesweeper)
+
+# Exercises the pure board logic and the level parser; also decodes the real
+# bundled blob and asserts every board is well-formed, so the asset path is
+# passed in as a compile definition.
+add_executable(test_blockfill test_blockfill.cpp)
+target_link_libraries(test_blockfill PRIVATE engine)
+target_compile_definitions(test_blockfill PRIVATE
+    BLOCKFILL_LEVELS_PATH="${CMAKE_SOURCE_DIR}/assets/blockfill/levels.bytes")
+add_test(NAME blockfill COMMAND test_blockfill)

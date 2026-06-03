@@ -24,6 +24,13 @@ struct Settings {
     int tapmatchLevelEasy = 1;
     int tapmatchLevelMedium = 1;
     int tapmatchLevelHard = 1;
+    // Block Fill progress: the current level (1-based) reached in each of its four
+    // difficulties. Like Tap Match, clearing a level advances its counter and the
+    // difficulty screen shows it on PLAY; each difficulty has its own board pool.
+    int blockfillLevelEasy = 1;
+    int blockfillLevelMedium = 1;
+    int blockfillLevelHard = 1;
+    int blockfillLevelVeryHard = 1;
     // Minesweeper win streaks per difficulty: the current run (reset to 0 on a
     // loss) and the all-time best. Shown in the in-game CURRENT STREAK / ALL TIME
     // panels; each difficulty tracks separately.

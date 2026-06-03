@@ -26,18 +26,19 @@ constexpr Color textMuted = rgb(150, 156, 170);
 constexpr Color line = rgb(80, 86, 100);
 
 // JindoBlu-style theme used by the menu, difficulty screen, and Tic-Tac-Toe.
-constexpr Color coral = rgb(240, 138, 110);       // Tic-Tac-Toe background
-constexpr Color panelBrown = rgb(74, 54, 54);     // scoreboard panel
-constexpr Color youRed = rgb(231, 76, 76);        // player (YOU / X)
-constexpr Color botCyan = rgb(45, 196, 230);      // bot (BOT / O)
-constexpr Color gridBlack = rgb(28, 28, 30);      // board grid lines
-constexpr Color cream = rgb(250, 235, 215);       // menu / difficulty background
-constexpr Color easyGreen = rgb(76, 187, 122);    // difficulty: easy
-constexpr Color mediumOrange = rgb(240, 165, 80); // difficulty: medium
-constexpr Color hardRed = rgb(231, 76, 76);       // difficulty: hard
-constexpr Color menuPink = rgb(236, 122, 150);    // menu card accent / top-bar icon
-constexpr Color menuPurple = rgb(150, 120, 220);  // menu card accent
-constexpr Color menuYellow = rgb(240, 188, 70);   // menu card accent
+constexpr Color coral = rgb(240, 138, 110);          // Tic-Tac-Toe background
+constexpr Color panelBrown = rgb(74, 54, 54);        // scoreboard panel
+constexpr Color youRed = rgb(231, 76, 76);           // player (YOU / X)
+constexpr Color botCyan = rgb(45, 196, 230);         // bot (BOT / O)
+constexpr Color gridBlack = rgb(28, 28, 30);         // board grid lines
+constexpr Color cream = rgb(250, 235, 215);          // menu / difficulty background
+constexpr Color easyGreen = rgb(76, 187, 122);       // difficulty: easy
+constexpr Color mediumOrange = rgb(240, 165, 80);    // difficulty: medium
+constexpr Color hardRed = rgb(231, 76, 76);          // difficulty: hard
+constexpr Color veryHardViolet = rgb(150, 110, 230); // difficulty: very hard (4th tier)
+constexpr Color menuPink = rgb(236, 122, 150);       // menu card accent / top-bar icon
+constexpr Color menuPurple = rgb(150, 120, 220);     // menu card accent
+constexpr Color menuYellow = rgb(240, 188, 70);      // menu card accent
 
 // Tap Match: maroon field, grey fruit tiles (white/raised when free, grey when
 // covered), and a dark holder bar with recessed slots.
@@ -64,6 +65,13 @@ constexpr std::array<Color, 8> mineNumbers = {
 };
 constexpr Color mineToggleActive = rgb(118, 202, 62); // selected dig/flag mode
 constexpr Color mineToggleIdle = rgb(96, 104, 120);   // unselected mode
+
+// Block Fill: the rope is a light-blue rounded cell body with a darker-blue
+// "tube" through the cell centres and a round head dot. Identity colors (they
+// read on the dark field and do not flip with the theme); the gray cell card and
+// the dark field are themed (see Theme::bfCell / Theme::bfField).
+constexpr Color blockFillRope = rgb(99, 179, 237); // light-blue rope body (== accent)
+constexpr Color blockFillTube = rgb(56, 130, 200); // darker tube + head dot
 
 constexpr Color white = rgb(255, 255, 255);
 constexpr Color overlay = rgb(0, 0, 0, 150); // semi-transparent game-over layer

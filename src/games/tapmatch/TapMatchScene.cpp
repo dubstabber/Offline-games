@@ -142,6 +142,8 @@ constexpr float kHolderRowCy = kHolderY + (kHolderH / 2.0F);
         return s.tapmatchLevelMedium;
     case Difficulty::Hard:
         return s.tapmatchLevelHard;
+    case Difficulty::VeryHard:
+        break; // Tap Match offers only three difficulties
     }
     return s.tapmatchLevelMedium;
 }

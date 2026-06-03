@@ -126,6 +126,7 @@ std::size_t TicTacToeBot::chooseMove(const TicTacToeBoard& board, Difficulty dif
     case Difficulty::Medium:
         return mediumMove(board);
     case Difficulty::Hard:
+    case Difficulty::VeryHard: // Tic-Tac-Toe offers only three; treat as hardest
         return bestMove(board);
     }
     return randomMove(board);

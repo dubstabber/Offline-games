@@ -29,9 +29,11 @@ private:
     bool handleSlider(const PointerEvent& event);
     void dragKnobTo(float x); // move the knob and snap difficulty to the nearest stop
     void setDifficulty(Difficulty difficulty);
+    [[nodiscard]] float stopX(Difficulty difficulty) const; // knob centre x for a stop
 
     SceneManager& manager_;
     GameInfo info_;
+    int stops_ = 3; // number of difficulty stops on the slider (info_.difficultyCount)
     Difficulty difficulty_ = Difficulty::Medium;
     std::string titleUpper_;
     std::vector<std::string> descLines_; // wrapped lazily on first render

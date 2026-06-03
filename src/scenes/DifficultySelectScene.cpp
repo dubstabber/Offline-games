@@ -42,21 +42,10 @@ const char* faceFor(Difficulty difficulty) {
         return "\xF0\x9F\x98\x90"; // 😐
     case Difficulty::Hard:
         return "\xF0\x9F\x98\x88"; // 😈
+    case Difficulty::VeryHard:
+        return "\xF0\x9F\xA4\xAF"; // 🤯
     }
     return "";
-}
-
-// x of the knob centre for a difficulty (Easy = left, Hard = right).
-float stopX(Difficulty difficulty) {
-    switch (difficulty) {
-    case Difficulty::Easy:
-        return kTrackX;
-    case Difficulty::Medium:
-        return kTrackX + (kTrackW / 2.0F);
-    case Difficulty::Hard:
-        return kTrackX + kTrackW;
-    }
-    return kTrackX;
 }
 
 // Greedy word-wrap to a max logical width using the canvas's text metrics.
@@ -93,8 +82,9 @@ std::vector<std::string> wrapText(Canvas& canvas, const std::string& text, float
 } // namespace
 
 DifficultySelectScene::DifficultySelectScene(SceneManager& manager, GameInfo info)
-    : manager_(manager), info_(std::move(info)), titleUpper_(info_.title),
-      playButton_("PLAY", kPlayX, kPlayY, kPlayW, kPlayH) {
+    : manager_(manager), info_(std::move(info)),
+      stops_(std::clamp(info_.difficultyCount, 2, 4)), // Difficulty has at most 4 values
+      titleUpper_(info_.title), playButton_("PLAY", kPlayX, kPlayY, kPlayW, kPlayH) {
     std::ranges::transform(titleUpper_, titleUpper_.begin(),
                            [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     setDifficulty(difficulty_);
@@ -175,8 +165,16 @@ bool DifficultySelectScene::handleSlider(const PointerEvent& event) {
 void DifficultySelectScene::dragKnobTo(float x) {
     knobX_ = std::clamp(x, kTrackX, kTrackX + kTrackW);
     const float t = (knobX_ - kTrackX) / kTrackW;
-    const auto stop = static_cast<int>(std::lround(t * 2.0F)); // nearest of 0, 1, 2
-    setDifficulty(static_cast<Difficulty>(stop));
+    const auto stop = static_cast<int>(std::lround(t * static_cast<float>(stops_ - 1)));
+    setDifficulty(static_cast<Difficulty>(std::clamp(stop, 0, stops_ - 1)));
+}
+
+// Knob centre x for a stop, spread evenly across the track (Easy = left edge,
+// the hardest = right edge), so 3- and 4-difficulty games space their stops out.
+float DifficultySelectScene::stopX(Difficulty difficulty) const {
+    const float frac =
+        static_cast<float>(static_cast<int>(difficulty)) / static_cast<float>(stops_ - 1);
+    return kTrackX + (kTrackW * frac);
 }
 
 void DifficultySelectScene::update(float /*dtSeconds*/) {}

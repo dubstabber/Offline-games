@@ -22,6 +22,10 @@ struct GameInfo {
     std::string emoji;       // single emoji icon, drawn from a font (no images)
     std::string description; // shown on the difficulty screen
     Color accent{};          // theme color for the card + PLAY button
+    // How many difficulties this game offers; the difficulty screen draws this
+    // many slider stops. Most games use the default three (Easy/Medium/Hard); a
+    // few — e.g. Block Fill — set 4 to add VeryHard.
+    int difficultyCount = 3;
     std::function<std::unique_ptr<Scene>(SceneManager&, Difficulty)> create = nullptr;
 
     // Optional: games with per-difficulty level progress provide this so the

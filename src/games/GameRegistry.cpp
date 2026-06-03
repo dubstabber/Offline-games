@@ -1,5 +1,6 @@
 #include "games/GameRegistry.hpp"
 
+#include "games/blockfill/BlockFillScene.hpp"
 #include "games/minesweeper/MineSweeperScene.hpp"
 #include "games/tapmatch/TapMatchScene.hpp"
 #include "games/tictactoe/TicTacToeScene.hpp"
@@ -51,6 +52,22 @@ const std::vector<GameInfo>& gameRegistry() {
             .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
                 return std::make_unique<MineSweeperScene>(manager, difficulty);
             },
+        });
+        list.push_back(GameInfo{
+            .id = "blockfill",
+            .title = "Block Fill",
+            .emoji = "\xF0\x9F\x9F\xA6", // 🟦
+            .description = "Draw one continuous line from the dot through every cell, covering "
+                           "each cell exactly once. Drag back over the line to undo.",
+            .accent = colors::accent, // light blue, like the rope
+            .difficultyCount = 4,     // Easy / Medium / Hard / Very Hard
+            // Each difficulty plays its own pool of the original game's boards (see
+            // BlockFillLevels), tracking its own level; PLAY launches the saved one.
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<BlockFillScene>(manager, difficulty,
+                                                        blockFillSavedLevel(difficulty));
+            },
+            .currentLevel = [](Difficulty difficulty) { return blockFillSavedLevel(difficulty); },
         });
 
         // Placeholder cards for games not built yet: a title/emoji/accent so the

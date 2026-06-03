@@ -88,6 +88,8 @@ struct DiffConfig {
         return {.width = 9, .height = 10, .mines = 15};
     case Difficulty::Hard:
         return {.width = 9, .height = 14, .mines = 27};
+    case Difficulty::VeryHard:
+        break; // Minesweeper offers only three difficulties
     }
     return {.width = 9, .height = 10, .mines = 15};
 }
@@ -106,6 +108,8 @@ struct DiffConfig {
         return s.minesweeperStreakMedium;
     case Difficulty::Hard:
         return s.minesweeperStreakHard;
+    case Difficulty::VeryHard:
+        break; // Minesweeper offers only three difficulties
     }
     return s.minesweeperStreakMedium;
 }
@@ -118,6 +122,8 @@ struct DiffConfig {
         return s.minesweeperBestMedium;
     case Difficulty::Hard:
         return s.minesweeperBestHard;
+    case Difficulty::VeryHard:
+        break; // Minesweeper offers only three difficulties
     }
     return s.minesweeperBestMedium;
 }
