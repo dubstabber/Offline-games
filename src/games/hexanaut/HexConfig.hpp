@@ -24,10 +24,16 @@ inline constexpr float kHexSpacing = std::numbers::sqrt3_v<float> * kHexSize;
 inline constexpr float kSquash = 0.58F;         // vertical foreshorten for the tilt
 inline constexpr float kPrismLiftFactor = 0.5F; // prism height as a fraction of kHexSize
 inline constexpr float kPrismLift = kHexSize * kPrismLiftFactor;
-inline constexpr float kGroundInset = 0.9F; // flat ground hexes drawn slightly small -> grid gaps
+inline constexpr float kGroundInset = 0.93F; // flat ground hexes drawn slightly small -> grid gaps
 
 inline constexpr float kTrailLiftFactor = 1.3F; // trails ride a bit above territory
 inline constexpr float kTrailLift = kPrismLift * kTrailLiftFactor;
+
+// The raised, glossy "rope" tube that trails behind a player while it is outside
+// its territory (on top of the flat outlined trail cells): how high it floats
+// above the ground and its radius as a fraction of kHexSize.
+inline constexpr float kTrailRopeLift = kPrismLift;
+inline constexpr float kTrailRopeRadius = 0.40F;
 
 // ---- Free movement ----------------------------------------------------------
 // Max heading change (radians/sec) as the avatar curves toward your finger. High

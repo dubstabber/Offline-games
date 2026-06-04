@@ -104,6 +104,23 @@ const std::array<Vec2, 6>& cornerUnits() {
     return s.hexanautBestMedium;
 }
 
+// A rounded "pill" of text: a filled rounded rect sized to the label with the
+// text centered on it. Used for avatar name tags and the leaderboard header.
+void drawTextPill(Canvas& canvas, std::string_view text, float cx, float cy, float fs, Color fill,
+                  Color textColor, float padX, float padY) {
+    const Canvas::Size sz = canvas.measure(text, fs);
+    const float w = sz.w + (padX * 2.0F);
+    const float h = sz.h + (padY * 2.0F);
+    canvas.fillRoundedRect(cx - (w * 0.5F), cy - (h * 0.5F), w, h, h * 0.5F, fill);
+    canvas.textCentered(text, cx, cy, fs, textColor);
+}
+
+// Translucent dark panel backing for the HUD / leaderboard / minimap chrome.
+constexpr Color kPanelBg = rgb(16, 18, 24, 222);
+constexpr Color kPanelInk = rgb(214, 218, 228);    // light text on the dark panels
+constexpr Color kHeaderEdge = rgb(60, 200, 222);   // cyan header outline (matches the reference)
+constexpr const char* kCrown = "\xF0\x9F\x91\x91"; // 👑
+
 } // namespace
 
 HexanautScene::HexanautScene(SceneManager& manager, Difficulty difficulty)
@@ -232,13 +249,19 @@ void HexanautScene::updateCamera(float dtSeconds) {
 
 // ---- Rendering --------------------------------------------------------------
 
-void HexanautScene::appendHexTop(Vec2 centerWorld, float inset, float lift, Color color) {
+void HexanautScene::appendHexTop(Vec2 centerWorld, float inset, float lift, Color colorTop,
+                                 Color colorBottom) {
+    // Blend colorTop (north corners) -> colorBottom (south corners) by a corner's
+    // vertical position so each face picks up a subtle top-lit bevel.
+    constexpr float kInvSpan = 1.0F / std::numbers::sqrt3_v<float>; // corner uy in [-.866,.866]
     const auto base = static_cast<int>(meshVerts_.size());
     const ScreenPos cs = toScreen(centerWorld, lift);
-    meshVerts_.push_back({.x = cs.x, .y = cs.y, .color = color});
+    meshVerts_.push_back({.x = cs.x, .y = cs.y, .color = pal::mix(colorTop, colorBottom, 0.5F)});
     for (int k = 0; k < 6; ++k) {
+        const Vec2 unit = cornerUnits().at(static_cast<std::size_t>(k));
+        const float t = std::clamp((unit.y * kInvSpan * 0.5F) + 0.5F, 0.0F, 1.0F);
         const ScreenPos sp = toScreen(centerWorld + cornerOffset(k, inset), lift);
-        meshVerts_.push_back({.x = sp.x, .y = sp.y, .color = color});
+        meshVerts_.push_back({.x = sp.x, .y = sp.y, .color = pal::mix(colorTop, colorBottom, t)});
     }
     for (int k = 0; k < 6; ++k) {
         meshIdx_.push_back(base);
@@ -268,6 +291,7 @@ void HexanautScene::drawField(Canvas& canvas) {
     meshVerts_.clear();
     meshIdx_.clear();
     powerupDraws_.clear();
+    trailOutlines_.clear();
 
     const hexanaut::HexGrid& grid = world_.grid();
     constexpr float kS = cfg::kHexSize;
@@ -277,15 +301,16 @@ void HexanautScene::drawField(Canvas& canvas) {
     const float wyMin = camY_ - (kHalfH / (cfg::kSquash * zoom_)) - worldMargin;
     const float wyMax = camY_ + (kHalfH / (cfg::kSquash * zoom_)) + worldMargin;
 
+    // Visible axial range, NOT clamped to the grid: cells beyond the board get a
+    // faint void honeycomb so the screen is always full (no hard black at edges).
     const float invQ = 1.0F / (1.5F * kS);
     const float invR = 1.0F / (std::numbers::sqrt3_v<float> * kS);
-    const int qMin = std::max(0, static_cast<int>(std::floor(wxMin * invQ)) - 1);
-    const int qMax = std::min(grid.width() - 1, static_cast<int>(std::ceil(wxMax * invQ)) + 1);
-    const int rMin = std::max(
-        0, static_cast<int>(std::floor((wyMin * invR) - (static_cast<float>(qMax) * 0.5F))) - 1);
-    const int rMax = std::min(
-        grid.height() - 1,
-        static_cast<int>(std::ceil((wyMax * invR) - (static_cast<float>(qMin) * 0.5F))) + 1);
+    const int qMin = static_cast<int>(std::floor(wxMin * invQ)) - 1;
+    const int qMax = static_cast<int>(std::ceil(wxMax * invQ)) + 1;
+    const int rMin =
+        static_cast<int>(std::floor((wyMin * invR) - (static_cast<float>(qMax) * 0.5F))) - 1;
+    const int rMax =
+        static_cast<int>(std::ceil((wyMax * invR) - (static_cast<float>(qMin) * 0.5F))) + 1;
 
     const float cullMargin = (2.0F * kS * zoom_) + (cfg::kTrailLift * zoom_);
 
@@ -293,16 +318,17 @@ void HexanautScene::drawField(Canvas& canvas) {
     for (int r = rMin; r <= rMax; ++r) {
         for (int q = qMin; q <= qMax; ++q) {
             const HexCoord coord{q, r};
-            if (!grid.contains(coord)) {
-                continue;
-            }
             const Vec2 center = hexanaut::axialToWorld(coord, kS);
             const ScreenPos cs = toScreen(center, 0.0F);
             if (cs.x < -cullMargin || cs.x > layout::kWidthF + cullMargin || cs.y < -cullMargin ||
                 cs.y > layout::kHeightF + cullMargin) {
                 continue;
             }
-            appendCellPrism(grid, coord, center);
+            if (grid.contains(coord)) {
+                appendCellPrism(grid, coord, center);
+            } else {
+                appendHexTop(center, cfg::kGroundInset, 0.0F, pal::kVoid, pal::kVoid);
+            }
         }
     }
 
@@ -312,14 +338,15 @@ void HexanautScene::drawField(Canvas& canvas) {
 void HexanautScene::appendCellPrism(const hexanaut::HexGrid& grid, HexCoord coord, Vec2 center) {
     const Cell& cell = grid.at(coord);
     if (cell.trailOwner != hexanaut::kNoTrail) {
-        // Active trail: a brighter prism riding a little higher than territory.
-        const Color base = pal::lighten(pal::topColor(cell.trailOwner), 0.4F);
-        const Color wallTop = pal::darken(base, pal::kWallTop);
-        const Color wallBottom = pal::darken(base, pal::kWallBottom);
-        for (int e = 0; e <= 2; ++e) {
-            appendWall(center, e, cfg::kTrailLift, wallTop, wallBottom);
-        }
-        appendHexTop(center, 1.04F, cfg::kTrailLift, base);
+        // Active (out-of-territory) trail: not an extruded prism. The cell stays at
+        // ground level, faintly tinted toward the owner's color, and gets a bright
+        // hex outline stroked on top (see drawTrailOutlines) — the claimed-but-not-
+        // captured look from the reference art. Closing the loop turns these into
+        // real (extruded) territory.
+        const Color owner = pal::topColor(cell.trailOwner);
+        appendHexTop(center, cfg::kGroundInset, 0.0F, pal::mix(pal::kGroundTop, owner, 0.22F),
+                     pal::mix(pal::kGroundBottom, owner, 0.16F));
+        trailOutlines_.push_back({.center = center, .owner = cell.trailOwner});
     } else if (cell.owner != hexanaut::kNeutral) {
         // Owned territory: front-facing walls only where it borders a different cell.
         const Color base = pal::topColor(cell.owner);
@@ -334,12 +361,85 @@ void HexanautScene::appendCellPrism(const hexanaut::HexGrid& grid, HexCoord coor
                 appendWall(center, e, cfg::kPrismLift, wallTop, wallBottom);
             }
         }
-        appendHexTop(center, 1.04F, cfg::kPrismLift, base);
+        appendHexTop(center, 1.04F, cfg::kPrismLift, pal::shade(base, pal::kFaceTop),
+                     pal::shade(base, pal::kFaceBottom));
     } else {
-        appendHexTop(center, cfg::kGroundInset, 0.0F, pal::kGround);
+        appendHexTop(center, cfg::kGroundInset, 0.0F, pal::kGroundTop, pal::kGroundBottom);
     }
     if (cell.powerup != 0) {
         powerupDraws_.push_back({.center = center, .type = cell.powerup});
+    }
+}
+
+void HexanautScene::drawTrailOutlines(Canvas& canvas) const {
+    // Stroke a bright owner-colored border around each active-trail hex (collected
+    // during drawField). Drawn on top of the field mesh so the outline reads
+    // cleanly over the faintly-tinted ground beneath it.
+    const float thick = std::max(2.0F, cfg::kHexSize * zoom_ * 0.11F);
+    for (const TrailOutline& t : trailOutlines_) {
+        const Color col = pal::lighten(pal::topColor(t.owner), 0.30F);
+        std::array<ScreenPos, 6> corners{};
+        for (int k = 0; k < 6; ++k) {
+            corners.at(static_cast<std::size_t>(k)) =
+                toScreen(t.center + cornerOffset(k, cfg::kGroundInset), 0.0F);
+        }
+        for (int k = 0; k < 6; ++k) {
+            const ScreenPos& a = corners.at(static_cast<std::size_t>(k));
+            const ScreenPos& b = corners.at(static_cast<std::size_t>((k + 1) % 6));
+            canvas.line(a.x, a.y, b.x, b.y, thick, col);
+        }
+    }
+}
+
+void HexanautScene::drawTrails(Canvas& canvas) {
+    // A raised, glossy "rope" tube behind every player that is currently outside
+    // its territory (i.e. has an active trail), riding above the flat outlined
+    // trail cells. The path is the ordered trail cell centers plus the live head;
+    // it's stroked in three passes — a dark rim, the body, and a top highlight —
+    // with discs at each joint so the bends stay round (Canvas::line is butt-cap).
+    constexpr float kS = cfg::kHexSize;
+    const float radius = std::max(4.0F, kS * zoom_ * cfg::kTrailRopeRadius);
+    for (const Player& p : world_.players()) {
+        if (!p.alive || p.trail.empty()) {
+            continue;
+        }
+        const Color owner = pal::topColor(p.id);
+        const Color rim = pal::darken(owner, 0.45F);
+        const Color gloss = pal::lighten(owner, 0.45F);
+
+        ropeScratch_.clear();
+        for (const HexCoord& c : p.trail) {
+            ropeScratch_.push_back(toScreen(hexanaut::axialToWorld(c, kS), cfg::kTrailRopeLift));
+        }
+        ropeScratch_.push_back(toScreen(p.pos, cfg::kTrailRopeLift));
+
+        // Routing through hex-cell centers leaves a sawtooth on diagonal runs; two
+        // 3-tap binomial passes cancel that Nyquist zig-zag for a smooth rope while
+        // keeping the endpoints (territory anchor and live head) pinned.
+        for (int pass = 0; pass < 2; ++pass) {
+            ScreenPos prev = ropeScratch_.front();
+            for (std::size_t i = 1; i + 1 < ropeScratch_.size(); ++i) {
+                const ScreenPos cur = ropeScratch_.at(i);
+                const ScreenPos& nxt = ropeScratch_.at(i + 1);
+                ropeScratch_.at(i) = {.x = (prev.x * 0.25F) + (cur.x * 0.5F) + (nxt.x * 0.25F),
+                                      .y = (prev.y * 0.25F) + (cur.y * 0.5F) + (nxt.y * 0.25F)};
+                prev = cur; // original (un-smoothed) neighbor for the next step
+            }
+        }
+
+        const auto stroke = [&](float rad, Color col, float dy) {
+            for (std::size_t i = 0; i + 1 < ropeScratch_.size(); ++i) {
+                const ScreenPos& a = ropeScratch_.at(i);
+                const ScreenPos& b = ropeScratch_.at(i + 1);
+                canvas.line(a.x, a.y + dy, b.x, b.y + dy, rad * 2.0F, col);
+            }
+            for (const ScreenPos& s : ropeScratch_) {
+                canvas.fillCircle(s.x, s.y + dy, rad, col);
+            }
+        };
+        stroke(radius + 2.5F, rim, 0.0F);               // dark rim → rounded 3D edge
+        stroke(radius, owner, 0.0F);                    // tube body
+        stroke(radius * 0.42F, gloss, -radius * 0.42F); // glossy top highlight
     }
 }
 
@@ -362,29 +462,90 @@ void HexanautScene::drawAvatars(Canvas& canvas) const {
             continue;
         }
         const Vec2 pw = avatarWorld(p);
-        const ScreenPos hp = toScreen(pw, cfg::kTrailLift + 6.0F);
-        const float r = std::max(6.0F, cfg::kHexSize * zoom_ * 0.5F);
+        // Sit on the surface the avatar is actually over: riding the raised rope
+        // while laying a trail, on top of its own (extruded) territory at home,
+        // else flat on the ground.
+        const hexanaut::HexGrid& grid = world_.grid();
+        float surfaceLift = 0.0F;
+        if (!p.trail.empty()) {
+            surfaceLift = cfg::kTrailRopeLift;
+        } else if (grid.contains(p.cell)) {
+            const Cell& under = grid.at(p.cell);
+            if (under.trailOwner == hexanaut::kNoTrail && under.owner == p.id) {
+                surfaceLift = cfg::kPrismLift;
+            }
+        }
+        const ScreenPos hp = toScreen(pw, surfaceLift + 6.0F);
+        const float r = std::max(7.0F, cfg::kHexSize * zoom_ * 0.5F);
         const Color body = pal::topColor(p.id);
-        // A nose pointing along the heading, drawn under the body so it just pokes
-        // out — makes the free-movement steering direction legible at a glance.
-        const ScreenPos np =
-            toScreen(pw + (hexanaut::unitFromAngle(p.angle) * (cfg::kHexSize * 0.95F)),
-                     cfg::kTrailLift + 6.0F);
-        canvas.line(hp.x, hp.y, np.x, np.y, std::max(3.0F, r * 0.55F), rgb(20, 22, 28));
-        canvas.fillCircle(hp.x, hp.y, r + 3.0F, rgb(20, 22, 28));
-        canvas.fillCircle(hp.x, hp.y, r, pal::lighten(body, 0.15F));
-        canvas.textCentered(p.name, hp.x, hp.y - r - 16.0F, 22.0F,
-                            p.isBot ? rgb(214, 218, 228) : colors::white);
+
+        // Heading as a screen-space unit (squash the y the way the projection
+        // does) so the visor and highlight sit correctly for the tilted view.
+        const Vec2 fwd = hexanaut::unitFromAngle(p.angle);
+        float dx = fwd.x;
+        float dy = fwd.y * cfg::kSquash;
+        const float dl = std::sqrt((dx * dx) + (dy * dy));
+        if (dl > 0.0001F) {
+            dx /= dl;
+            dy /= dl;
+        }
+
+        // Soft contact shadow tucked just under the token (same plane as the trail
+        // top so it stays attached), then dark rim, lit body, a dark "visor" facing
+        // the heading, and a small highlight — reads as a little helmeted token
+        // whose facing direction is legible at a glance (replaces the old nose).
+        const ScreenPos shadow = toScreen(pw, surfaceLift);
+        canvas.fillCircle(shadow.x, shadow.y + (r * 0.35F), r * 0.95F, rgb(0, 0, 0, 90));
+        canvas.fillCircle(hp.x, hp.y, r + 3.0F, rgb(16, 18, 24));
+        canvas.fillCircle(hp.x, hp.y, r, pal::lighten(body, 0.16F));
+        canvas.fillCircle(hp.x + (dx * r * 0.40F), hp.y + (dy * r * 0.40F), r * 0.52F,
+                          rgb(26, 28, 36));
+        canvas.fillCircle(hp.x - (dx * r * 0.34F), hp.y - (dy * r * 0.34F), r * 0.24F,
+                          rgb(255, 255, 255, 205));
+
+        // Name tag on a rounded pill: a darkened tint of the owner's color for the
+        // human, a neutral dark chip for bots.
+        const Color pill = p.isBot ? rgb(28, 30, 38, 228) : pal::darken(body, 0.62F);
+        const Color tagText = p.isBot ? kPanelInk : colors::white;
+        drawTextPill(canvas, p.name, hp.x, hp.y - r - 20.0F, 22.0F, pill, tagText, 14.0F, 7.0F);
     }
 }
 
 void HexanautScene::drawHud(Canvas& canvas) const {
     drawBackButton(canvas);
-    const float cx = layout::kWidthF * 0.5F;
-    canvas.textCentered(label(difficulty_), cx, 42.0F, 26.0F, color(difficulty_));
-    canvas.textCentered(formatPercent(world_.playerPercent()), cx, 100.0F, 60.0F, colors::white);
-    canvas.textCentered("KILLS " + std::to_string(world_.player().kills), cx, 150.0F, 22.0F,
-                        colors::textMuted);
+
+    // Your rank among all players (1 = most territory) drives the crown badge.
+    const float myPct = world_.playerPercent();
+    int rank = 1;
+    for (const Player& other : world_.players()) {
+        if (world_.percent(other.id) > myPct) {
+            ++rank;
+        }
+    }
+
+    // Left HUD panel: difficulty tag, your territory %, kills, and a crown if 1st.
+    constexpr float kPx = 158.0F;
+    constexpr float kPy = 44.0F;
+    constexpr float kPw = 250.0F;
+    constexpr float kPh = 118.0F;
+    canvas.fillRoundedRect(kPx, kPy, kPw, kPh, 18.0F, kPanelBg);
+
+    canvas.text(label(difficulty_), kPx + 20.0F, kPy + 13.0F, 22.0F, color(difficulty_),
+                Canvas::Align::Left);
+
+    const Color body = pal::topColor(world_.player().id);
+    canvas.fillRoundedRect(kPx + 20.0F, kPy + 52.0F, 22.0F, 22.0F, 5.0F, body);
+    canvas.text(formatPercent(myPct), kPx + 54.0F, kPy + 42.0F, 44.0F, colors::white,
+                Canvas::Align::Left);
+
+    canvas.text("KILLS  " + std::to_string(world_.player().kills), kPx + 20.0F, kPy + 92.0F, 20.0F,
+                colors::textMuted, Canvas::Align::Left);
+    if (rank == 1) {
+        canvas.emojiCentered(kCrown, kPx + kPw - 34.0F, kPy + 60.0F, 36.0F);
+    } else {
+        canvas.text("#" + std::to_string(rank), kPx + kPw - 24.0F, kPy + 92.0F, 20.0F, kPanelInk,
+                    Canvas::Align::Right);
+    }
 }
 
 void HexanautScene::drawLeaderboard(Canvas& canvas) const {
@@ -403,38 +564,72 @@ void HexanautScene::drawLeaderboard(Canvas& canvas) const {
     }
     std::ranges::sort(rows, [](const Row& a, const Row& b) { return a.pct > b.pct; });
 
-    constexpr float kFs = 22.0F;
-    constexpr float kRowH = 30.0F;
     constexpr int kMaxRows = 6;
-    const float leftX = layout::kWidthF - 270.0F;
-    const float rightX = layout::kWidthF - 18.0F;
-
-    canvas.text(std::to_string(aliveCount) + " players", rightX, 116.0F, 20.0F, colors::textMuted,
-                Canvas::Align::Right);
+    constexpr float kFs = 21.0F;
+    constexpr float kRowH = 33.0F;
+    constexpr float kPad = 12.0F;
+    constexpr float kHeaderH = 40.0F;
+    constexpr float kPanelW = 292.0F;
+    const float panelX = layout::kWidthF - kPanelW - 14.0F;
+    constexpr float panelY = 28.0F;
 
     const int shown = std::min<int>(kMaxRows, static_cast<int>(rows.size()));
-    int youRank = 0;
-    float y = 152.0F;
+    int youIdx = 0;
     for (std::size_t i = 0; i < rows.size(); ++i) {
         if (!rows.at(i).p->isBot) {
-            youRank = static_cast<int>(i) + 1;
+            youIdx = static_cast<int>(i);
         }
     }
+    const bool youOutside = youIdx >= shown;
+
+    const float rowsTop = panelY + kPad + kHeaderH + 26.0F;
+    const float panelH = (rowsTop - panelY) + (static_cast<float>(shown) * kRowH) +
+                         (youOutside ? kRowH + 10.0F : 0.0F) + kPad;
+    canvas.fillRoundedRect(panelX, panelY, kPanelW, panelH, 16.0F, kPanelBg);
+
+    // Header pill with a cyan outline, like the reference's LEADERBOARD banner.
+    const float hx = panelX + kPad;
+    const float hy = panelY + kPad;
+    const float hw = kPanelW - (2.0F * kPad);
+    canvas.fillRoundedRect(hx - 2.0F, hy - 2.0F, hw + 4.0F, kHeaderH + 4.0F, 12.0F, kHeaderEdge);
+    canvas.fillRoundedRect(hx, hy, hw, kHeaderH, 10.0F, rgb(26, 28, 36));
+    canvas.textCentered("LEADERBOARD", panelX + (kPanelW * 0.5F), hy + (kHeaderH * 0.5F), 24.0F,
+                        colors::white);
+    canvas.text(std::to_string(aliveCount) + " players", panelX + kPanelW - kPad - 4.0F,
+                hy + kHeaderH + 4.0F, 18.0F, colors::textMuted, Canvas::Align::Right);
+
+    const float chipX = panelX + kPad + 6.0F;
+    const float nameX = chipX + 28.0F;
+    const float pctX = panelX + kPanelW - kPad - 4.0F;
+    constexpr float kChip = 18.0F;
+
+    const auto drawRow = [&](int displayRank, const Player& p, float pct, float y, bool you) {
+        if (you) {
+            canvas.fillRoundedRect(panelX + 6.0F, y - 3.0F, kPanelW - 12.0F, kRowH - 3.0F, 8.0F,
+                                   rgb(255, 255, 255, 20));
+        }
+        const Color chipCol = pal::topColor(p.id);
+        canvas.fillRoundedRect(chipX, y + ((kRowH - kChip) * 0.5F) - 3.0F, kChip, kChip, 4.0F,
+                               chipCol);
+        const Color textCol = you ? pal::lighten(chipCol, 0.25F) : colors::white;
+        canvas.text(std::to_string(displayRank) + "  " + p.name, nameX, y, kFs, textCol,
+                    Canvas::Align::Left);
+        canvas.text(formatPercent(pct), pctX, y, kFs, textCol, Canvas::Align::Right);
+    };
+
+    float y = rowsTop;
     for (int i = 0; i < shown; ++i) {
         const Row& row = rows.at(static_cast<std::size_t>(i));
-        const bool you = !row.p->isBot;
-        const Color c = you ? colors::white : pal::topColor(row.p->id);
-        canvas.text(std::to_string(i + 1) + " " + row.p->name, leftX, y, kFs, c,
-                    Canvas::Align::Left);
-        canvas.text(formatPercent(row.pct), rightX, y, kFs, c, Canvas::Align::Right);
+        drawRow(i + 1, *row.p, row.pct, y, !row.p->isBot);
         y += kRowH;
     }
-    if (youRank > shown) {
-        y += 8.0F;
-        canvas.text(std::to_string(youRank) + " YOU", leftX, y, kFs, colors::white,
-                    Canvas::Align::Left);
-        canvas.text(formatPercent(world_.playerPercent()), rightX, y, kFs, colors::white,
-                    Canvas::Align::Right);
+    if (youOutside) {
+        y += 4.0F;
+        canvas.line(panelX + 12.0F, y - 2.0F, panelX + kPanelW - 12.0F, y - 2.0F, 1.0F,
+                    rgb(255, 255, 255, 40));
+        y += 6.0F;
+        const Row& me = rows.at(static_cast<std::size_t>(youIdx));
+        drawRow(youIdx + 1, *me.p, me.pct, y, true);
     }
 }
 
@@ -510,6 +705,8 @@ void HexanautScene::drawOverlay(Canvas& canvas) const {
 void HexanautScene::render(Canvas& canvas) {
     canvas.clear(pal::kBackdrop);
     drawField(canvas);
+    drawTrailOutlines(canvas);
+    drawTrails(canvas);
     drawPowerups(canvas);
     drawAvatars(canvas);
     drawHud(canvas);

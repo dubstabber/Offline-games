@@ -47,11 +47,17 @@ private:
     void updateCamera(float dtSeconds);
 
     static void drawBackButton(Canvas& canvas);
-    void appendHexTop(hexanaut::Vec2 centerWorld, float inset, float lift, Color color);
+    // Append a hex top face. The face is gradient-shaded from a lit north edge
+    // (colorTop) down to a darker south edge (colorBottom) for a bevelled look;
+    // pass the same color twice for a flat fill.
+    void appendHexTop(hexanaut::Vec2 centerWorld, float inset, float lift, Color colorTop,
+                      Color colorBottom);
     void appendWall(hexanaut::Vec2 centerWorld, int edge, float liftTop, Color top, Color bottom);
     void appendCellPrism(const hexanaut::HexGrid& grid, hexanaut::HexCoord coord,
                          hexanaut::Vec2 center);
     void drawField(Canvas& canvas);
+    void drawTrailOutlines(Canvas& canvas) const;
+    void drawTrails(Canvas& canvas);
     void drawPowerups(Canvas& canvas) const;
     void drawAvatars(Canvas& canvas) const;
     void drawHud(Canvas& canvas) const;
@@ -62,6 +68,13 @@ private:
     struct PowerupDraw {
         hexanaut::Vec2 center;
         std::uint8_t type = 0;
+    };
+
+    // An active-trail hex collected during drawField and stroked as a bright
+    // owner-colored outline in drawTrailOutlines (the out-of-territory look).
+    struct TrailOutline {
+        hexanaut::Vec2 center;
+        hexanaut::PlayerId owner = 0;
     };
 
     SceneManager& manager_;
@@ -85,7 +98,9 @@ private:
     // Reused geometry buffers so the whole field submits in one fillMesh call.
     std::vector<Canvas::Vertex> meshVerts_;
     std::vector<int> meshIdx_;
-    std::vector<PowerupDraw> powerupDraws_; // power-up cells found during drawField
+    std::vector<PowerupDraw> powerupDraws_;   // power-up cells found during drawField
+    std::vector<TrailOutline> trailOutlines_; // active-trail cells found during drawField
+    std::vector<ScreenPos> ropeScratch_;      // reused per-player rope path in drawTrails
 
     Button homeButton_;
     Button retryButton_;
