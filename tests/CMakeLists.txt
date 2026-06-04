@@ -40,3 +40,7 @@ add_test(NAME blockfill COMMAND test_blockfill)
 add_executable(test_snake test_snake.cpp)
 target_link_libraries(test_snake PRIVATE engine)
 add_test(NAME snake COMMAND test_snake)
+
+add_executable(test_hexanaut test_hexanaut.cpp)
+target_link_libraries(test_hexanaut PRIVATE engine)
+add_test(NAME hexanaut COMMAND test_hexanaut)

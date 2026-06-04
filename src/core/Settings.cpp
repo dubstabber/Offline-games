@@ -121,6 +121,12 @@ std::string serialize(const Settings& settings) {
     out += std::to_string(settings.snakeBestMedium);
     out += "\nsnakeBestHard=";
     out += std::to_string(settings.snakeBestHard);
+    out += "\nhexanautBestEasy=";
+    out += std::to_string(settings.hexanautBestEasy);
+    out += "\nhexanautBestMedium=";
+    out += std::to_string(settings.hexanautBestMedium);
+    out += "\nhexanautBestHard=";
+    out += std::to_string(settings.hexanautBestHard);
     out += "\n";
     return out;
 }
@@ -182,6 +188,12 @@ Settings parse(std::string_view text) {
             parseInt(value, settings.snakeBestMedium);
         } else if (key == "snakeBestHard") {
             parseInt(value, settings.snakeBestHard);
+        } else if (key == "hexanautBestEasy") {
+            parseInt(value, settings.hexanautBestEasy);
+        } else if (key == "hexanautBestMedium") {
+            parseInt(value, settings.hexanautBestMedium);
+        } else if (key == "hexanautBestHard") {
+            parseInt(value, settings.hexanautBestHard);
         }
         // Unknown keys are ignored so older/newer files stay forward-compatible.
     }
@@ -203,6 +215,9 @@ Settings parse(std::string_view text) {
     settings.snakeBestEasy = std::max(0, settings.snakeBestEasy);
     settings.snakeBestMedium = std::max(0, settings.snakeBestMedium);
     settings.snakeBestHard = std::max(0, settings.snakeBestHard);
+    settings.hexanautBestEasy = std::max(0, settings.hexanautBestEasy);
+    settings.hexanautBestMedium = std::max(0, settings.hexanautBestMedium);
+    settings.hexanautBestHard = std::max(0, settings.hexanautBestHard);
     return settings;
 }
 

@@ -6,6 +6,7 @@
 #include <array>
 #include <cmath>
 #include <numbers>
+#include <span>
 #include <vector>
 
 namespace og {
@@ -103,6 +104,40 @@ void Canvas::line(float x1, float y1, float x2, float y2, float thickness, Color
     const std::array<int, 6> indices{0, 1, 2, 0, 2, 3};
     SDL_RenderGeometry(renderer_, nullptr, verts.data(), static_cast<int>(verts.size()),
                        indices.data(), static_cast<int>(indices.size()));
+}
+
+void Canvas::fillMesh(std::span<const Vertex> verts, std::span<const int> indices) {
+    if (verts.size() < 3 || indices.size() < 3) {
+        return;
+    }
+    meshScratch_.clear();
+    meshScratch_.reserve(verts.size());
+    for (const Vertex& v : verts) {
+        meshScratch_.push_back(SDL_Vertex{SDL_FPoint{v.x, v.y},
+                                          SDL_FColor{static_cast<float>(v.color.r) / 255.0F,
+                                                     static_cast<float>(v.color.g) / 255.0F,
+                                                     static_cast<float>(v.color.b) / 255.0F,
+                                                     static_cast<float>(v.color.a) / 255.0F},
+                                          SDL_FPoint{0, 0}});
+    }
+    SDL_RenderGeometry(renderer_, nullptr, meshScratch_.data(),
+                       static_cast<int>(meshScratch_.size()), indices.data(),
+                       static_cast<int>(indices.size()));
+}
+
+void Canvas::fillConvexPolygon(std::span<const Vertex> corners) {
+    if (corners.size() < 3) {
+        return;
+    }
+    // Triangle fan from corner 0: (0,1,2), (0,2,3), …
+    std::vector<int> indices;
+    indices.reserve((corners.size() - 2) * 3);
+    for (std::size_t i = 1; i + 1 < corners.size(); ++i) {
+        indices.push_back(0);
+        indices.push_back(static_cast<int>(i));
+        indices.push_back(static_cast<int>(i + 1));
+    }
+    fillMesh(corners, indices);
 }
 
 const Canvas::CachedText* Canvas::rasterize(std::string_view str, float pixelSize, Color color) {

@@ -4,9 +4,11 @@
 #include "core/Sdl.hpp"
 
 #include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 namespace og {
 
@@ -35,6 +37,25 @@ public:
     void fillRoundedRect(float x, float y, float w, float h, float radius, Color color);
     void fillCircle(float cx, float cy, float radius, Color color);
     void line(float x1, float y1, float x2, float y2, float thickness, Color color);
+
+    // A single colored vertex in logical canvas pixels, used by the polygon and
+    // mesh primitives below so games can describe filled geometry (e.g. extruded
+    // hex prisms) without ever touching SDL types directly.
+    struct Vertex {
+        float x = 0.0F;
+        float y = 0.0F;
+        Color color{};
+    };
+
+    // Filled convex polygon (>= 3 corners), triangulated as a fan from corners[0]
+    // in one SDL_RenderGeometry call. Corners must be given in boundary order.
+    void fillConvexPolygon(std::span<const Vertex> corners);
+
+    // Draw an arbitrary triangle mesh (indices into verts) in a single
+    // SDL_RenderGeometry call. The batched path: build one big buffer — a whole
+    // hex field, say — and submit it at once instead of thousands of small draws,
+    // which matters on the PinePhone's draw-call-bound Mali-400.
+    void fillMesh(std::span<const Vertex> verts, std::span<const int> indices);
 
     // ---- Text / emoji -------------------------------------------------------
     // `pixelSize` is the glyph height in logical pixels. `align` positions the
@@ -68,6 +89,7 @@ private:
     // intentionally non-copyable, so the deleted assignment is fine.
     FontManager& fonts_; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     std::unordered_map<std::string, CachedText> textCache_;
+    std::vector<SDL_Vertex> meshScratch_; // reused by fillMesh to avoid per-frame allocation
 };
 
 } // namespace og

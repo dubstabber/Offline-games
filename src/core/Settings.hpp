@@ -45,6 +45,11 @@ struct Settings {
     int snakeBestEasy = 0;
     int snakeBestMedium = 0;
     int snakeBestHard = 0;
+    // Hexanaut best territory reached per difficulty, in tenths of a percent
+    // (e.g. 123 == 12.3%). Shown on the game-over overlay; tracks separately.
+    int hexanautBestEasy = 0;
+    int hexanautBestMedium = 0;
+    int hexanautBestHard = 0;
 };
 
 // Pure and SDL-free (so they are unit-testable): turn Settings into the on-disk

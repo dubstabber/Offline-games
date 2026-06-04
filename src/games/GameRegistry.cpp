@@ -1,6 +1,7 @@
 #include "games/GameRegistry.hpp"
 
 #include "games/blockfill/BlockFillScene.hpp"
+#include "games/hexanaut/HexanautScene.hpp"
 #include "games/minesweeper/MineSweeperScene.hpp"
 #include "games/snake/SnakeScene.hpp"
 #include "games/tapmatch/TapMatchScene.hpp"
@@ -81,6 +82,19 @@ const std::vector<GameInfo>& gameRegistry() {
             .accent = colors::easyGreen,
             .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
                 return std::make_unique<SnakeScene>(manager, difficulty);
+            },
+        });
+
+        list.push_back(GameInfo{
+            .id = "hexanaut",
+            .title = "Hexanaut",
+            .emoji = "\xF0\x9F\x9A\x80", // 🚀
+            .description = "Roll out across the hex map, loop back to your own land, and claim "
+                           "everything you enclosed. Cut a rival's trail before they close it to "
+                           "knock them out. Own the most territory.",
+            .accent = colors::menuPink,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<HexanautScene>(manager, difficulty);
             },
         });
 

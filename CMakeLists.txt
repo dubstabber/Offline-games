@@ -60,6 +60,10 @@ add_library(engine STATIC
     src/games/snake/SnakeWorld.cpp
     src/games/snake/GhostLeaderboard.cpp
     src/games/snake/SnakeScene.cpp
+    src/games/hexanaut/HexGrid.cpp
+    src/games/hexanaut/HexBots.cpp
+    src/games/hexanaut/HexWorld.cpp
+    src/games/hexanaut/HexanautScene.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
     src/scenes/SettingsScene.cpp)
