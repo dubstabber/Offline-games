@@ -114,7 +114,7 @@ struct Snake {
     std::deque<Vec2> path;  // head samples, index 0 = newest (just behind head)
     float pathAccum = 0.0F; // distance travelled since the last path sample
     float boostDropAccum = 0.0F;
-    float invulnTimer = 0.0F; // seconds of spawn invulnerability left
+    float invulnTimer = 0.0F; // seconds of spawn border protection left
     bool alive = true;
     bool isBot = true;
     BotConfig bot;

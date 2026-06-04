@@ -66,8 +66,14 @@ private:
 
     [[nodiscard]] const FoodOrb* nearestFood(Vec2 from, float radius) const;
     [[nodiscard]] const Snake* findPrey(std::size_t index, float maxScoreRatio) const;
-    [[nodiscard]] static float bodyReach(const Snake& snake);
     [[nodiscard]] static bool headHitsBody(const Snake& head, const Snake& body);
+    // Which of a snake pair die from their interaction this step.
+    struct PairDeaths {
+        bool a = false;
+        bool b = false;
+    };
+    [[nodiscard]] static PairDeaths resolvePair(const Snake& sa, const Snake& sb);
+    [[nodiscard]] bool hitsBorder(const Snake& snake) const;
     // True if `point` lies within (snake.radius + margin) of any alive snake's
     // body/head except `excludeIndex`. Used for bot avoidance + safe spawning.
     [[nodiscard]] bool pointHitsBody(Vec2 point, std::size_t excludeIndex, float margin) const;

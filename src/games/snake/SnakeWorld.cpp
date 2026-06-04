@@ -8,11 +8,29 @@ namespace {
 
 using namespace config;
 
-constexpr std::size_t kCollisionStride = 2; // test every Nth body sample
 constexpr float kPlayerStartScore = 10.0F;
 
 [[nodiscard]] float foodRadiusFor(float mass) {
     return std::min(kFoodBaseRadius + (mass * kFoodRadiusPerMass), kFoodRadiusCap);
+}
+
+// True if a disc (center, radius) overlaps any part of `body` — its head or any
+// stored body sample. Every sample is tested: there is no spacing-based
+// broad-phase, because a snake's samples can be spaced wider than its *current*
+// spacing (e.g. after boosting shrinks it), which made a `path.size() * spacing`
+// reach estimate under-count the body and silently drop tail collisions. At <=21
+// snakes the full scan is cheap and correct regardless of grow/shrink history.
+[[nodiscard]] bool discHitsBody(Vec2 center, float radius, const Snake& body) {
+    const float rr = radius + body.radius;
+    const float rr2 = rr * rr;
+    const auto overlaps = [&](Vec2 p) { return distSq(center, p) <= rr2; };
+    return overlaps(body.head) || std::ranges::any_of(body.path, overlaps);
+}
+
+// Where a snake's head was one fixed step ago (it advanced by speed*dt along its
+// current heading this step). Used to tell who drove their head into a collision.
+[[nodiscard]] Vec2 prevHeadOf(const Snake& s) {
+    return s.head - (fromAngle(s.heading) * (s.speed * kFixedDt));
 }
 
 } // namespace
@@ -293,31 +311,98 @@ void SnakeWorld::resolveFoodPickup() {
     }
 }
 
+bool SnakeWorld::hitsBorder(const Snake& snake) const {
+    return snake.head.x < snake.radius || snake.head.x > worldSize_ - snake.radius ||
+           snake.head.y < snake.radius || snake.head.y > worldSize_ - snake.radius;
+}
+
+// Resolve one snake pair. A snake whose head overlaps the other's body crashed.
+// When only one head is inside the other's body, that snake alone dies. When both
+// heads overlap each other the static picture is ambiguous, so we look at motion:
+// a head that *drove in* this step (its previous-step position was clear) is the
+// one that crashed.
+//   * Exactly one drove in -> only it dies. This lets a rammed, sitting/coiled
+//     snake survive while the rammer dies.
+//   * Both drove in AND the two heads are touching -> a genuine head-to-head: the
+//     bigger snake wins and the smaller dies (equal scores -> both die).
+//   * Otherwise (both ran their heads into the other's *body*, or a stuck
+//     overlap) -> both crash. The head-touching gate is what stops a big snake
+//     from sailing through a small one it merely overran (the small body fits
+//     inside the big head's reach, but the heads are far apart).
+// Spawn invulnerability only protects against the world edge. Snake bodies are
+// always solid, so freshly respawned small snakes cannot phase through tails.
+SnakeWorld::PairDeaths SnakeWorld::resolvePair(const Snake& sa, const Snake& sb) {
+    const bool aHits = headHitsBody(sa, sb);
+    const bool bHits = headHitsBody(sb, sa);
+    if (!aHits && !bHits) {
+        return {};
+    }
+    PairDeaths out;
+    if (aHits != bHits) { // a clear, one-sided crash
+        out.a = aHits;
+        out.b = bHits;
+        return out;
+    }
+    // Tangle: both heads overlap. Blame the head(s) that drove in this step.
+    const bool aDrove = !discHitsBody(prevHeadOf(sa), sa.radius, sb);
+    const bool bDrove = !discHitsBody(prevHeadOf(sb), sb.radius, sa);
+    if (aDrove != bDrove) { // exactly one drove in -> only it is at fault
+        out.a = aDrove;
+        out.b = bDrove;
+        return out;
+    }
+    // A genuine head-on needs the heads to actually meet AND the snakes to be
+    // moving into each other. That distinguishes it from one snake overrunning
+    // the other's body (e.g. a big head sweeping over a small snake, whose whole
+    // body fits inside the big head's reach so both heads "overlap"): there the
+    // snakes are not facing off, so it is a crash and both die — no free pass for
+    // the bigger one.
+    const float headSum = sa.radius + sb.radius;
+    const Vec2 aToB = sb.head - sa.head;
+    const bool facingOff =
+        dot(fromAngle(sa.heading), aToB) > 0.0F && dot(fromAngle(sb.heading), aToB) < 0.0F;
+    if (facingOff && distSq(sa.head, sb.head) <= headSum * headSum) {
+        out.a = sa.score <= sb.score; // bigger wins, equal -> both die
+        out.b = sb.score <= sa.score;
+    } else { // overrun / mutual body crash / stuck -> both crash
+        out.a = true;
+        out.b = true;
+    }
+    return out;
+}
+
 void SnakeWorld::resolveCollisions() {
-    std::vector<char> dead(snakes_.size(), 0);
-    for (std::size_t a = 0; a < snakes_.size(); ++a) {
+    const std::size_t n = snakes_.size();
+    std::vector<char> dead(n, 0);
+
+    // World edge: only snakes past their spawn invulnerability die to it.
+    for (std::size_t a = 0; a < n; ++a) {
         const Snake& self = snakes_.at(a);
-        if (!self.alive || self.invulnTimer > 0.0F) {
-            continue;
-        }
-        // World edge.
-        if (self.head.x < self.radius || self.head.x > worldSize_ - self.radius ||
-            self.head.y < self.radius || self.head.y > worldSize_ - self.radius) {
+        if (self.alive && self.invulnTimer <= 0.0F && hitsBorder(self)) {
             dead.at(a) = 1;
+        }
+    }
+
+    // Snake-vs-snake, resolved per unordered pair so head-on hits are symmetric.
+    for (std::size_t a = 0; a < n; ++a) {
+        if (!snakes_.at(a).alive) {
             continue;
         }
-        // Head into another snake's body.
-        for (std::size_t b = 0; b < snakes_.size(); ++b) {
-            if (b == a || !snakes_.at(b).alive) {
+        for (std::size_t b = a + 1; b < n; ++b) {
+            if (!snakes_.at(b).alive) {
                 continue;
             }
-            if (headHitsBody(self, snakes_.at(b))) {
+            const PairDeaths out = resolvePair(snakes_.at(a), snakes_.at(b));
+            if (out.a) {
                 dead.at(a) = 1;
-                break;
+            }
+            if (out.b) {
+                dead.at(b) = 1;
             }
         }
     }
-    for (std::size_t a = 0; a < snakes_.size(); ++a) {
+
+    for (std::size_t a = 0; a < n; ++a) {
         if (dead.at(a) != 0 && snakes_.at(a).alive) {
             snakes_.at(a).alive = false;
             dropDeathLoot(snakes_.at(a));
@@ -342,23 +427,8 @@ void SnakeWorld::maintainFood() {
     }
 }
 
-float SnakeWorld::bodyReach(const Snake& snake) {
-    return (static_cast<float>(snake.path.size()) * snake.spacing) + snake.radius;
-}
-
 bool SnakeWorld::headHitsBody(const Snake& head, const Snake& body) {
-    const float reach = bodyReach(body) + head.radius;
-    if (distSq(head.head, body.head) > reach * reach) {
-        return false;
-    }
-    const float rr = head.radius + body.radius;
-    const float rr2 = rr * rr;
-    for (std::size_t k = 0; k < body.path.size(); k += kCollisionStride) {
-        if (distSq(head.head, body.path.at(k)) <= rr2) {
-            return true;
-        }
-    }
-    return false;
+    return discHitsBody(head.head, head.radius, body);
 }
 
 bool SnakeWorld::pointHitsBody(Vec2 point, std::size_t excludeIndex, float margin) const {
@@ -367,17 +437,13 @@ bool SnakeWorld::pointHitsBody(Vec2 point, std::size_t excludeIndex, float margi
         if (i == excludeIndex || !s.alive) {
             continue;
         }
-        const float reach = bodyReach(s) + margin;
-        if (distSq(point, s.head) > reach * reach) {
-            continue;
-        }
         const float rr = s.radius + margin;
         const float rr2 = rr * rr;
         if (distSq(point, s.head) <= rr2) {
             return true;
         }
-        for (std::size_t k = 0; k < s.path.size(); k += kCollisionStride) {
-            if (distSq(point, s.path.at(k)) <= rr2) {
+        for (const Vec2& seg : s.path) {
+            if (distSq(point, seg) <= rr2) {
                 return true;
             }
         }
