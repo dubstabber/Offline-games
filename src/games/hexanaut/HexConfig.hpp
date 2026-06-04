@@ -2,6 +2,8 @@
 
 #include "games/hexanaut/BotController.hpp"
 
+#include <numbers>
+
 // Tuning constants for Hexanaut: the fixed-timestep cadence (shared with the
 // Snake pattern), the fake-3D projection knobs, and the camera. Pure data, no
 // SDL — the projection numbers are consumed by HexanautScene at draw time.
@@ -13,7 +15,12 @@ inline constexpr float kFixedDt = 1.0F / 60.0F;
 inline constexpr float kMaxAccumDt = 0.25F;
 
 // ---- Fake-3D projection -----------------------------------------------------
-inline constexpr float kHexSize = 26.0F;        // world units, center to corner
+inline constexpr float kHexSize = 26.0F; // world units, center to corner
+// Distance between adjacent flat-top hex centers (all 6 neighbors are sqrt3*size
+// apart). Free movement converts a per-hex stepInterval into a world speed:
+// speed = kHexSpacing / stepInterval, so an avatar crosses one hex in the same
+// time the old discrete stepping did.
+inline constexpr float kHexSpacing = std::numbers::sqrt3_v<float> * kHexSize;
 inline constexpr float kSquash = 0.58F;         // vertical foreshorten for the tilt
 inline constexpr float kPrismLiftFactor = 0.5F; // prism height as a fraction of kHexSize
 inline constexpr float kPrismLift = kHexSize * kPrismLiftFactor;
@@ -21,6 +28,12 @@ inline constexpr float kGroundInset = 0.9F; // flat ground hexes drawn slightly 
 
 inline constexpr float kTrailLiftFactor = 1.3F; // trails ride a bit above territory
 inline constexpr float kTrailLift = kPrismLift * kTrailLiftFactor;
+
+// ---- Free movement ----------------------------------------------------------
+// Max heading change (radians/sec) as the avatar curves toward your finger. High
+// enough for tight loops, low enough that it can't snap a 180° onto its own trail
+// — a ~180° about-face takes roughly the time to cross two hexes.
+inline constexpr float kTurnRate = 10.0F;
 
 // ---- Camera -----------------------------------------------------------------
 inline constexpr float kBaseZoom = 1.0F;

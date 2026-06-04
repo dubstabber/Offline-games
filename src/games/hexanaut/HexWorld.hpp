@@ -12,11 +12,13 @@
 
 namespace og::hexanaut {
 
-// One participant in the match. Movement is discrete hex-stepping: the player
-// sits on `cell`, came from `fromCell`, and `stepProgress` in [0,1) is how far it
-// has glided toward the next cell — the Scene uses it to interpolate a smooth
-// avatar position. `trail` is the ordered run of cells claimed outside own
-// territory since leaving it; closing the loop captures them.
+// One participant in the match. Movement is free and continuous: the player has
+// a world-space `pos` and a heading `angle` that curves toward `desiredAngle` at
+// a capped turn rate, and `cell` is just the hex it currently sits over (updated
+// when `pos` rounds into a new one). `heading`/`desiredDir` are the angle snapped
+// to the 6 hex axes, kept so bots can still reason in discrete directions. `trail`
+// is the ordered run of cells claimed outside own territory since leaving it;
+// closing the loop captures them.
 struct Player {
     PlayerId id = 0;
     bool isBot = true;
@@ -24,13 +26,15 @@ struct Player {
 
     HexCoord cell{};
     HexCoord fromCell{};
-    HexCoord home{}; // spawn anchor inside own territory; bots steer back to it
-    HexDir heading = HexDir::N;
-    HexDir desiredDir = HexDir::None;
+    HexCoord home{};                  // spawn anchor inside own territory; bots steer back to it
+    Vec2 pos;                         // continuous world position (the avatar's true location)
+    float angle = 0.0F;               // current heading, radians
+    float desiredAngle = 0.0F;        // heading the player steers toward
+    HexDir heading = HexDir::N;       // `angle` snapped to 6 axes (for bots/view)
+    HexDir desiredDir = HexDir::None; // bot/test desired axis -> desiredAngle
 
     float stepInterval = 0.15F;     // seconds per hex (lowered while Speed is active)
     float baseStepInterval = 0.15F; // restored when Speed wears off
-    float stepProgress = 0.0F;      // [0,1) toward the next cell
     float speedTimer = 0.0F;        // seconds of Speed power-up left
     float visionTimer = 0.0F;       // seconds of Vision left (human only; the Scene reads it)
 
@@ -41,21 +45,21 @@ struct Player {
 };
 
 // The pure, SDL-free Hexanaut simulation: a bounded flat-top hex board plus the
-// players that conquer it. Rules (movement, trail capture via flood fill,
+// players that conquer it. Rules (free movement, trail capture via flood fill,
 // trail-cut / self-trail death, scoring) live here and are unit-tested; the Scene
-// only renders this and feeds the human's desired direction. Determinism comes
-// from a single seeded RNG and id-ordered resolution, so (difficulty, seed,
-// inputs) replays identically.
+// only renders this and feeds the human's steering angle. Determinism comes from
+// a single seeded RNG and id-ordered resolution, so (difficulty, seed, inputs)
+// replays identically.
 class HexWorld {
 public:
     HexWorld(int difficultyIndex, std::uint32_t seed);
 
-    // The human is player 0. Sets the direction it will turn to at the next cell
-    // center (ignored if it would be a 180° reversal).
-    void setPlayerDesiredDir(HexDir dir);
+    // The human is player 0. Sets the world-space heading it steers toward; the
+    // avatar curves to it at a capped turn rate (it cannot reverse instantly).
+    void setPlayerDesiredAngle(float angleRad);
 
-    // Advance one fixed sub-step (config::kFixedDt). Accrues per-player step
-    // progress and resolves any hex moves that cross a cell boundary.
+    // Advance one fixed sub-step (config::kFixedDt): turn each avatar toward its
+    // desired heading, glide it forward, and resolve any hex it crosses into.
     void step();
 
     [[nodiscard]] const Player& player() const { return players_.front(); }
@@ -107,19 +111,27 @@ private:
     void maybeSpawnPowerup();
     static void applyPowerup(Player& p, PowerUp type);
     [[nodiscard]] HexDir deflectHeading(HexCoord cell, HexDir heading) const;
+    // Steer `angle` to the nearest heading whose `probe`-long forward step stays
+    // on the board, so a free-moving avatar slides along walls instead of leaving.
+    [[nodiscard]] float deflectAngle(Vec2 pos, float angle, float probe) const;
 
     // One tick of motion, split into compute-then-apply stages (mirrors how
-    // SnakeWorld::step delegates to small sub-steps).
+    // SnakeWorld::step delegates to small sub-steps). `pos`/`angle`/`heading` are
+    // the new pose; `entered` flags that the avatar crossed into `target` this
+    // tick, which is what drives trail laying, capture, and collisions.
     struct Move {
-        bool stepping = false;
+        bool entered = false;
         HexCoord target{};
         HexDir heading = HexDir::None;
+        float angle = 0.0F;
+        Vec2 pos;
     };
-    [[nodiscard]] std::vector<Move> computeMoves();
+    [[nodiscard]] std::vector<Move> integrateMotion(); // production: continuous glide
+    [[nodiscard]] std::vector<Move> forcedCellMoves(); // tests: force one hex step
     void detectDeaths(const std::vector<Move>& moves, std::vector<char>& dead);
     void commitMoves(const std::vector<Move>& moves, const std::vector<char>& dead);
     void respawnDeadBots();
-    void resolveTick(bool allowRespawn);
+    void resolveTick(const std::vector<Move>& moves, bool allowRespawn);
 
     HexGrid grid_;
     std::vector<Player> players_;

@@ -8,6 +8,7 @@
 namespace {
 
 using og::hexanaut::axialToWorld;
+using og::hexanaut::dirAngle;
 using og::hexanaut::HexCoord;
 using og::hexanaut::HexDir;
 using og::hexanaut::hexDistance;
@@ -15,8 +16,18 @@ using og::hexanaut::HexGrid;
 using og::hexanaut::HexWorld;
 using og::hexanaut::neighbor;
 using og::hexanaut::opposite;
+using og::hexanaut::PlayerId;
 using og::hexanaut::quantizeToHexDir;
 using og::hexanaut::Vec2;
+using og::hexanaut::worldToAxial;
+
+// Kill every bot so a free-movement test can drive player 0 in isolation.
+void soloHuman(HexWorld& world) {
+    const int n = static_cast<int>(world.players().size());
+    for (int id = 1; id < n; ++id) {
+        world.setAliveForTest(static_cast<PlayerId>(id), false);
+    }
+}
 
 // The HexDir whose neighbor of `a` is `b` (a and b must be adjacent).
 HexDir dirBetween(HexCoord a, HexCoord b) {
@@ -60,6 +71,47 @@ void testHexMath() {
         const auto dir = static_cast<HexDir>(d);
         const Vec2 delta = axialToWorld(neighbor(o, dir), 1.0F) - axialToWorld(o, 1.0F);
         assert(quantizeToHexDir(og::hexanaut::angleOf(delta)) == dir);
+    }
+}
+
+// worldToAxial is the inverse of axialToWorld: every cell center round-trips back
+// to its own coordinate (this is what maps a free avatar's position to its hex).
+void testWorldToAxialRoundTrip() {
+    constexpr float kSize = 26.0F;
+    for (const HexCoord c : {HexCoord{0, 0}, HexCoord{5, 5}, HexCoord{20, 13}, HexCoord{40, 39}}) {
+        assert(worldToAxial(axialToWorld(c, kSize), kSize) == c);
+    }
+}
+
+// Free movement: gliding straight up from neutral ground moves the avatar north
+// (y decreases) and lays a multi-cell trail, without dying or leaving the board.
+void testFreeMovementTrail() {
+    HexWorld world(0, 21);
+    soloHuman(world);
+    world.placePlayerForTest(0, {20, 20}, HexDir::N); // far from the central home
+    const Vec2 start = world.player().pos;
+    for (int k = 0; k < 40; ++k) {
+        world.setPlayerDesiredAngle(dirAngle(HexDir::N));
+        world.step();
+    }
+    assert(world.playerAlive());
+    assert(world.player().pos.y < start.y - 1.0F); // N points up (negative y)
+    assert(world.player().cell != HexCoord(20, 20));
+    assert(world.trailOf(0).size() >= 2);
+    assert(world.grid().contains(world.player().cell));
+}
+
+// Steering straight into the left wall must never carry the avatar off the board
+// or kill it — the heading deflects so it slides along the edge.
+void testFreeMovementWallDeflect() {
+    HexWorld world(0, 22);
+    soloHuman(world);
+    world.placePlayerForTest(0, {0, 28}, HexDir::NW); // NW would leave the board at q=0
+    for (int k = 0; k < 40; ++k) {
+        world.setPlayerDesiredAngle(dirAngle(HexDir::NW));
+        world.step();
+        assert(world.grid().contains(world.player().cell));
+        assert(world.playerAlive());
     }
 }
 
@@ -285,6 +337,9 @@ void testPowerupPickup() {
 
 int main() {
     testHexMath();
+    testWorldToAxialRoundTrip();
+    testFreeMovementTrail();
+    testFreeMovementWallDeflect();
     testGrid();
     testStartHome();
     testTrailRecording();

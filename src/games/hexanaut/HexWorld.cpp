@@ -8,8 +8,10 @@
 #include <array>
 #include <cstddef>
 #include <deque>
+#include <numbers>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 namespace og::hexanaut {
 namespace {
@@ -62,9 +64,11 @@ void HexWorld::spawnHome(Player& p, HexCoord center, int radius) {
     p.cell = center;
     p.fromCell = center;
     p.home = center;
+    p.pos = axialToWorld(center, config::kHexSize);
+    p.angle = dirAngle(HexDir::N);
+    p.desiredAngle = p.angle;
     p.heading = HexDir::N;
     p.desiredDir = HexDir::None;
-    p.stepProgress = 0.0F;
     p.alive = true;
     p.trail.clear();
     p.stepInterval = p.baseStepInterval; // a respawn drops any active power-up
@@ -94,8 +98,8 @@ void HexWorld::setOwner(HexCoord c, PlayerId newOwner) {
     }
 }
 
-void HexWorld::setPlayerDesiredDir(HexDir dir) {
-    players_.front().desiredDir = dir;
+void HexWorld::setPlayerDesiredAngle(float angleRad) {
+    players_.front().desiredAngle = angleRad;
 }
 
 HexDir HexWorld::deflectHeading(HexCoord cell, HexDir heading) const {
@@ -117,6 +121,9 @@ void HexWorld::decideBots() {
     for (Player& p : players_) {
         if (p.isBot && p.alive && bots_.at(static_cast<std::size_t>(p.id))) {
             p.desiredDir = bots_.at(static_cast<std::size_t>(p.id))->decide(view, p.id);
+            if (p.desiredDir != HexDir::None) {
+                p.desiredAngle = dirAngle(p.desiredDir); // bots steer toward their chosen axis
+            }
         }
     }
 }
@@ -125,12 +132,7 @@ void HexWorld::step() {
     decideBots();
     decayEffects();
     maybeSpawnPowerup();
-    for (Player& p : players_) {
-        if (p.alive) {
-            p.stepProgress += config::kFixedDt / p.stepInterval;
-        }
-    }
-    resolveTick(true);
+    resolveTick(integrateMotion(), true);
 }
 
 void HexWorld::decayEffects() {
@@ -192,16 +194,10 @@ void HexWorld::applyPowerup(Player& p, PowerUp type) {
 }
 
 void HexWorld::advanceCellForTest() {
-    for (Player& p : players_) {
-        if (p.alive) {
-            p.stepProgress = 1.0F;
-        }
-    }
-    resolveTick(false);
+    resolveTick(forcedCellMoves(), false);
 }
 
-void HexWorld::resolveTick(bool allowRespawn) {
-    const std::vector<Move> moves = computeMoves();
+void HexWorld::resolveTick(const std::vector<Move>& moves, bool allowRespawn) {
     std::vector<char> dead(players_.size(), 0);
     detectDeaths(moves, dead);
     for (std::size_t i = 0; i < players_.size(); ++i) {
@@ -215,49 +211,110 @@ void HexWorld::resolveTick(bool allowRespawn) {
     }
 }
 
-std::vector<HexWorld::Move> HexWorld::computeMoves() {
+std::vector<HexWorld::Move> HexWorld::integrateMotion() {
+    std::vector<Move> moves(players_.size());
+    constexpr float dt = config::kFixedDt;
+    constexpr float maxTurn = config::kTurnRate * dt;
+    for (std::size_t i = 0; i < players_.size(); ++i) {
+        Player& p = players_.at(i);
+        if (!p.alive) {
+            continue;
+        }
+        // Curve toward the desired heading by at most one turn-rate step.
+        const float delta = std::clamp(wrapAngle(p.desiredAngle - p.angle), -maxTurn, maxTurn);
+        const float stepLen = (config::kHexSpacing / p.stepInterval) * dt;
+        const float ang = deflectAngle(p.pos, p.angle + delta, stepLen); // slide off walls
+        const Vec2 npos = p.pos + (unitFromAngle(ang) * stepLen);
+        const HexCoord ncell = worldToAxial(npos, config::kHexSize);
+        // A re-touch of the cell we just left (sub-cell jitter along an edge) is
+        // not a real crossing — only count a genuinely new in-bounds cell.
+        const bool entered = grid_.contains(ncell) && ncell != p.cell && ncell != p.fromCell;
+        moves.at(i) = Move{.entered = entered,
+                           .target = entered ? ncell : p.cell,
+                           .heading = quantizeToHexDir(ang),
+                           .angle = ang,
+                           .pos = npos};
+    }
+    return moves;
+}
+
+std::vector<HexWorld::Move> HexWorld::forcedCellMoves() {
+    // Deterministic test driver: force every alive player exactly one hex along its
+    // desired axis (honoring the no-reversal and wall-deflection rules), so the
+    // shared death/capture path can be exercised without the continuous integrator.
     std::vector<Move> moves(players_.size());
     for (std::size_t i = 0; i < players_.size(); ++i) {
         Player& p = players_.at(i);
-        if (!p.alive || p.stepProgress < 1.0F) {
+        if (!p.alive) {
             continue;
         }
-        // Turn at the cell center: honor the desired direction unless it reverses.
         HexDir h = p.heading;
         if (p.desiredDir != HexDir::None && p.desiredDir != opposite(p.heading)) {
             h = p.desiredDir;
         }
         h = deflectHeading(p.cell, h); // walls deflect, never kill
-        moves.at(i) = Move{.stepping = true, .target = neighbor(p.cell, h), .heading = h};
+        const HexCoord target = neighbor(p.cell, h);
+        moves.at(i) = Move{.entered = true,
+                           .target = target,
+                           .heading = h,
+                           .angle = dirAngle(h),
+                           .pos = axialToWorld(target, config::kHexSize)};
     }
     return moves;
 }
 
+float HexWorld::deflectAngle(Vec2 pos, float angle, float probe) const {
+    const auto inBoundsAt = [&](float a) {
+        return grid_.contains(worldToAxial(pos + (unitFromAngle(a) * probe), config::kHexSize));
+    };
+    if (inBoundsAt(angle)) {
+        return angle;
+    }
+    // Fan out in 15° steps (turn the short way first) until a heading keeps the
+    // forward step on the board — the continuous analogue of deflectHeading.
+    constexpr float kInc = std::numbers::pi_v<float> / 12.0F;
+    for (int s = 1; s <= 12; ++s) {
+        for (const int sgn : {1, -1}) {
+            const float a = angle + (static_cast<float>(sgn) * kInc * static_cast<float>(s));
+            if (inBoundsAt(a)) {
+                return a;
+            }
+        }
+    }
+    return angle; // fully boxed in (shouldn't happen on a real board)
+}
+
 void HexWorld::detectDeaths(const std::vector<Move>& moves, std::vector<char>& dead) {
     const std::size_t n = players_.size();
-    // Trail cuts: stepping onto a trail kills its owner (your own trail kills you).
+    // Trail cuts: crossing onto a trail kills its owner (your own trail kills you).
     for (std::size_t i = 0; i < n; ++i) {
-        if (!moves.at(i).stepping) {
+        if (!moves.at(i).entered) {
             continue;
         }
-        const PlayerId trailOwner = grid_.at(moves.at(i).target).trailOwner;
+        const HexCoord target = moves.at(i).target;
+        const PlayerId trailOwner = grid_.at(target).trailOwner;
         if (trailOwner == kNoTrail) {
             continue;
         }
         if (trailOwner == players_.at(i).id) {
-            dead.at(i) = 1;
+            // Brushing the freshest cell of your own trail is sub-cell jitter, not a
+            // real self-cross; only crossing older trail is fatal.
+            const std::vector<HexCoord>& trail = players_.at(i).trail;
+            if (trail.empty() || target != trail.back()) {
+                dead.at(i) = 1;
+            }
         } else {
             dead.at(static_cast<std::size_t>(trailOwner)) = 1;
             players_.at(i).kills += 1; // credit the cutter
         }
     }
-    // Head-to-head: two steppers into the same cell both fall.
+    // Head-to-head: two avatars crossing into the same cell this tick both fall.
     for (std::size_t i = 0; i < n; ++i) {
-        if (!moves.at(i).stepping) {
+        if (!moves.at(i).entered) {
             continue;
         }
         for (std::size_t j = i + 1; j < n; ++j) {
-            if (moves.at(j).stepping && moves.at(i).target == moves.at(j).target) {
+            if (moves.at(j).entered && moves.at(i).target == moves.at(j).target) {
                 dead.at(i) = 1;
                 dead.at(j) = 1;
             }
@@ -267,15 +324,17 @@ void HexWorld::detectDeaths(const std::vector<Move>& moves, std::vector<char>& d
 
 void HexWorld::commitMoves(const std::vector<Move>& moves, const std::vector<char>& dead) {
     for (std::size_t i = 0; i < players_.size(); ++i) {
-        if (!moves.at(i).stepping) {
-            continue;
-        }
         Player& p = players_.at(i);
-        p.stepProgress -= 1.0F;
-        if (dead.at(i) != 0) {
-            continue; // died this tick; no move
+        if (!p.alive || dead.at(i) != 0) {
+            continue; // not moving, or died this tick — leave it where it fell
         }
+        // Always advance the continuous pose so the avatar glides smoothly.
+        p.pos = moves.at(i).pos;
+        p.angle = moves.at(i).angle;
         p.heading = moves.at(i).heading;
+        if (!moves.at(i).entered) {
+            continue; // still within the same hex; nothing claimed
+        }
         p.fromCell = p.cell;
         p.cell = moves.at(i).target;
         Cell& tc = grid_.at(p.cell);
@@ -283,7 +342,9 @@ void HexWorld::commitMoves(const std::vector<Move>& moves, const std::vector<cha
             if (!p.trail.empty()) {
                 closeTrailAndCapture(p);
             }
-        } else {
+        } else if (tc.trailOwner != p.id) {
+            // Lay trail on fresh ground (a rival's trail here was already cleared by
+            // the death pass; never double-record a cell already in our own trail).
             tc.trailOwner = p.id;
             p.trail.push_back(p.cell);
         }
@@ -489,9 +550,11 @@ void HexWorld::placePlayerForTest(PlayerId id, HexCoord cell, HexDir heading) {
     Player& p = players_.at(static_cast<std::size_t>(id));
     p.cell = cell;
     p.fromCell = cell;
+    p.pos = axialToWorld(cell, config::kHexSize);
+    p.angle = dirAngle(heading);
+    p.desiredAngle = p.angle;
     p.heading = heading;
     p.desiredDir = HexDir::None;
-    p.stepProgress = 0.0F;
     p.trail.clear();
 }
 

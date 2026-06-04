@@ -120,4 +120,57 @@ inline constexpr std::array<std::pair<int, int>, 6> kHexDirs{{
     return static_cast<HexDir>(k);
 }
 
+// Canonical world-space heading (radians) for a direction — the inverse of
+// quantizeToHexDir's snapping. Direction k sits at (-90 + 60*k) degrees. Free
+// movement converts a bot's chosen HexDir into the angle it steers toward.
+[[nodiscard]] inline float dirAngle(HexDir d) {
+    constexpr float kDegToRad = std::numbers::pi_v<float> / 180.0F;
+    return (-90.0F + (60.0F * static_cast<float>(static_cast<int>(d)))) * kDegToRad;
+}
+
+// Wrap an angle difference into (-pi, pi], so steering always turns the short way.
+[[nodiscard]] inline float wrapAngle(float a) {
+    constexpr float kPi = std::numbers::pi_v<float>;
+    constexpr float kTwoPi = 2.0F * kPi;
+    a = std::fmod(a + kPi, kTwoPi);
+    if (a < 0.0F) {
+        a += kTwoPi;
+    }
+    return a - kPi;
+}
+
+[[nodiscard]] inline Vec2 unitFromAngle(float a) {
+    return {std::cos(a), std::sin(a)};
+}
+
+// Round fractional axial coords to the nearest hex via cube rounding (reconcile
+// the three cube axes by fixing the component with the largest rounding error).
+[[nodiscard]] inline HexCoord hexRound(float qf, float rf) {
+    const float x = qf;
+    const float z = rf;
+    const float y = -x - z;
+    float rx = std::round(x);
+    float ry = std::round(y);
+    float rz = std::round(z);
+    const float dx = std::abs(rx - x);
+    const float dy = std::abs(ry - y);
+    const float dz = std::abs(rz - z);
+    if (dx > dy && dx > dz) {
+        rx = -ry - rz;
+    } else if (dy > dz) {
+        ry = -rx - rz;
+    } else {
+        rz = -rx - ry;
+    }
+    return {static_cast<int>(rx), static_cast<int>(rz)};
+}
+
+// World-pixel center -> nearest flat-top axial cell. Inverse of axialToWorld; the
+// hex a free-moving avatar currently sits over.
+[[nodiscard]] inline HexCoord worldToAxial(Vec2 w, float size) {
+    const float qf = w.x / (1.5F * size);
+    const float rf = (w.y / (std::numbers::sqrt3_v<float> * size)) - (qf * 0.5F);
+    return hexRound(qf, rf);
+}
+
 } // namespace og::hexanaut

@@ -135,8 +135,7 @@ Vec2 HexanautScene::screenToWorld(float sx, float sy) const {
 }
 
 Vec2 HexanautScene::avatarWorld(const Player& p) {
-    return hexanaut::lerp(hexanaut::axialToWorld(p.fromCell, cfg::kHexSize),
-                          hexanaut::axialToWorld(p.cell, cfg::kHexSize), p.stepProgress);
+    return p.pos; // free movement: the avatar's continuous world position
 }
 
 // ---- Input ------------------------------------------------------------------
@@ -190,7 +189,9 @@ void HexanautScene::update(float dtSeconds) {
             const Vec2 aim = screenToWorld(aimScreen_.x, aimScreen_.y);
             const Vec2 dir = aim - avatarWorld(world_.player());
             if (hexanaut::length(dir) > 4.0F) {
-                world_.setPlayerDesiredDir(hexanaut::quantizeToHexDir(hexanaut::angleOf(dir)));
+                // Free movement: steer toward wherever the finger points (the sim
+                // caps how fast the avatar can curve to it).
+                world_.setPlayerDesiredAngle(hexanaut::angleOf(dir));
             }
         }
         accum_ += std::min(dtSeconds, cfg::kMaxAccumDt);
@@ -360,9 +361,16 @@ void HexanautScene::drawAvatars(Canvas& canvas) const {
         if (!p.alive) {
             continue;
         }
-        const ScreenPos hp = toScreen(avatarWorld(p), cfg::kTrailLift + 6.0F);
+        const Vec2 pw = avatarWorld(p);
+        const ScreenPos hp = toScreen(pw, cfg::kTrailLift + 6.0F);
         const float r = std::max(6.0F, cfg::kHexSize * zoom_ * 0.5F);
         const Color body = pal::topColor(p.id);
+        // A nose pointing along the heading, drawn under the body so it just pokes
+        // out — makes the free-movement steering direction legible at a glance.
+        const ScreenPos np =
+            toScreen(pw + (hexanaut::unitFromAngle(p.angle) * (cfg::kHexSize * 0.95F)),
+                     cfg::kTrailLift + 6.0F);
+        canvas.line(hp.x, hp.y, np.x, np.y, std::max(3.0F, r * 0.55F), rgb(20, 22, 28));
         canvas.fillCircle(hp.x, hp.y, r + 3.0F, rgb(20, 22, 28));
         canvas.fillCircle(hp.x, hp.y, r, pal::lighten(body, 0.15F));
         canvas.textCentered(p.name, hp.x, hp.y - r - 16.0F, 22.0F,

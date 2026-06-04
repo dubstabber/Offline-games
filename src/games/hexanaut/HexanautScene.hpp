@@ -18,9 +18,9 @@ class SceneManager;
 // fixed-angle fake-3D axonometric style: claimed cells and trails are extruded
 // prisms drawn with flat-shaded polygons (no images). The pure simulation lives
 // in HexWorld; this Scene owns the follow-camera, projects the logic plane to the
-// screen, turns touch input into a hex heading, and draws the layered prism field
-// plus HUD. Movement is discrete hex-stepping; the avatar is interpolated between
-// cells for smooth motion.
+// screen, turns touch input into a steering angle, and draws the layered prism
+// field plus HUD. Movement is free: the avatar holds a continuous world position
+// and heading that curves toward the finger, claiming the hex cells it crosses.
 class HexanautScene : public Scene {
 public:
     HexanautScene(SceneManager& manager, Difficulty difficulty);
