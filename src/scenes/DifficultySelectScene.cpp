@@ -84,7 +84,10 @@ std::vector<std::string> wrapText(Canvas& canvas, const std::string& text, float
 DifficultySelectScene::DifficultySelectScene(SceneManager& manager, GameInfo info)
     : manager_(manager), info_(std::move(info)),
       stops_(std::clamp(info_.difficultyCount, 2, 4)), // Difficulty has at most 4 values
-      titleUpper_(info_.title), playButton_("PLAY", kPlayX, kPlayY, kPlayW, kPlayH) {
+      titleUpper_(info_.title),
+      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      playButton_("PLAY", kPlayX, kPlayY, kPlayW, kPlayH) {
+    backButton_.setOnTap([this] { manager_.pop(); });
     std::ranges::transform(titleUpper_, titleUpper_.begin(),
                            [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
     setDifficulty(difficulty_);
@@ -101,27 +104,8 @@ void DifficultySelectScene::setDifficulty(Difficulty difficulty) {
     playButton_.setColors(color(difficulty_), colors::white);
 }
 
-bool DifficultySelectScene::handleBackButton(const PointerEvent& event) {
-    if (event.phase == PointerEvent::Phase::Move) {
-        return false;
-    }
-    const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
-                                kBackRadius * 2.0F, kBackRadius * 2.0F);
-    if (event.phase == PointerEvent::Phase::Down) {
-        backPressed_ = inside;
-        return inside;
-    }
-    const bool wasPressed = backPressed_;
-    backPressed_ = false;
-    if (wasPressed && inside) {
-        manager_.pop();
-        return true;
-    }
-    return false;
-}
-
 void DifficultySelectScene::handleInput(const PointerEvent& event) {
-    if (handleBackButton(event)) {
+    if (backButton_.handleInput(event)) {
         return;
     }
     if (handleSlider(event)) {
@@ -182,10 +166,7 @@ void DifficultySelectScene::update(float /*dtSeconds*/) {}
 void DifficultySelectScene::render(Canvas& canvas) {
     canvas.clear(theme().menuBg);
 
-    // Back button.
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
+    backButton_.render(canvas);
 
     canvas.textCentered(titleUpper_, layout::kWidthF / 2.0F, 150.0F, 64.0F, theme().titleText);
 

@@ -24,8 +24,10 @@ public:
     [[nodiscard]] Scene* current() const;
     [[nodiscard]] bool empty() const { return scenes_.empty(); }
 
-    // Apply any push/pop/replace requested during the current frame.
-    void applyPending();
+    // Apply any push/pop/replace requested during the current frame. Returns true
+    // if the stack actually changed, so the caller can force a redraw of the
+    // newly revealed scene.
+    bool applyPending();
 
 private:
     enum class Action : std::uint8_t { None, Push, Pop, PopToRoot, Replace };

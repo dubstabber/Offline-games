@@ -90,6 +90,8 @@ private:
     FontManager& fonts_; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     std::unordered_map<std::string, CachedText> textCache_;
     std::vector<SDL_Vertex> meshScratch_; // reused by fillMesh to avoid per-frame allocation
+    std::vector<int> polyScratch_;        // reused by fillConvexPolygon for its fan indices
+    std::string keyScratch_;              // reused by rasterize so a cache hit allocates nothing
 };
 
 } // namespace og

@@ -5,7 +5,8 @@
 #include "games/snake/GhostLeaderboard.hpp"
 #include "games/snake/SnakeTypes.hpp"
 #include "games/snake/SnakeWorld.hpp"
-#include "ui/Button.hpp"
+#include "ui/IconButton.hpp"
+#include "ui/ResultOverlay.hpp"
 
 #include <cstdint>
 
@@ -36,7 +37,6 @@ private:
         float y = 0.0F;
     };
 
-    bool handleBackButton(const PointerEvent& event);
     bool handleBoostButton(const PointerEvent& event);
     void handleSteer(const PointerEvent& event);
     void enterGameOver();
@@ -46,7 +46,6 @@ private:
     [[nodiscard]] static bool onScreen(float sx, float sy, float screenRadius);
     void updateCamera(float dtSeconds);
 
-    static void drawBackButton(Canvas& canvas);
     void drawArena(Canvas& canvas) const;
     void drawFood(Canvas& canvas) const;
     void drawSnake(Canvas& canvas, const snake::Snake& s, bool isPlayer) const;
@@ -69,15 +68,14 @@ private:
     bool hasAim_ = false;
     bool boosting_ = false;
     bool boostLatched_ = false; // the active pointer is holding the boost button
-    bool backPressed_ = false;
+    IconButton backButton_;
 
     Phase phase_ = Phase::Playing;
     bool recorded_ = false;
     int finalScore_ = 0;
     int bestScore_ = 0;
 
-    Button homeButton_;
-    Button retryButton_;
+    ResultOverlay overlay_;
 };
 
 } // namespace og

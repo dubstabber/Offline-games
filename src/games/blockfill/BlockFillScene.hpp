@@ -3,7 +3,8 @@
 #include "core/Scene.hpp"
 #include "games/blockfill/BlockFillBoard.hpp"
 #include "games/Difficulty.hpp"
-#include "ui/Button.hpp"
+#include "ui/IconButton.hpp"
+#include "ui/ResultOverlay.hpp"
 
 #include <cstdint>
 
@@ -34,8 +35,6 @@ private:
     // Playing: a drag traces the rope. Solved: only the result overlay responds.
     enum class Phase : std::uint8_t { Playing, Solved };
 
-    bool handleBackButton(const PointerEvent& event);
-    bool handleResetButton(const PointerEvent& event);
     void handleDrag(const PointerEvent& event);
     void onSolved(); // persist + advance, show the overlay
 
@@ -45,8 +44,6 @@ private:
     [[nodiscard]] float cellCenterX(int x) const;
     [[nodiscard]] float cellCenterY(int y) const;
 
-    static void drawBackButton(Canvas& canvas);
-    static void drawResetButton(Canvas& canvas);
     void drawTopBar(Canvas& canvas) const;
     void drawGrid(Canvas& canvas) const;
     void drawRope(Canvas& canvas) const;
@@ -57,8 +54,8 @@ private:
     int level_;
     BlockFillBoard board_;
     Phase phase_ = Phase::Playing;
-    bool backPressed_ = false;
-    bool resetPressed_ = false;
+    IconButton backButton_;
+    IconButton resetButton_;
     bool dragging_ = false;
     int lastCellX_ = -1; // last grid cell the drag processed (avoids re-stepping)
     int lastCellY_ = -1;
@@ -68,8 +65,7 @@ private:
     float originX_ = 0.0F;
     float originY_ = 0.0F;
 
-    Button homeButton_;
-    Button nextButton_;
+    ResultOverlay overlay_;
 };
 
 } // namespace og

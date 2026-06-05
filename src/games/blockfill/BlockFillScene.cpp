@@ -2,6 +2,7 @@
 
 #include "core/Canvas.hpp"
 #include "core/Color.hpp"
+#include "core/GridLayout.hpp"
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
@@ -39,15 +40,9 @@ constexpr float kAreaW = layout::kWidthF - (2.0F * kAreaX);
 constexpr float kAreaH = kAreaBottom - kAreaTop;
 constexpr float kMaxCellPx = 96.0F;
 
-// ---- Solved overlay buttons — same layout as the other games ---------------
+// ---- Solved overlay row position -------------------------------------------
 constexpr float kButtonRowY = 820.0F;
-constexpr float kHomeSize = 140.0F;
-constexpr float kNextW = 360.0F;
-constexpr float kButtonGap = 24.0F;
-constexpr float kRowWidth = kHomeSize + kButtonGap + kNextW;
-constexpr float kRowX = (layout::kWidthF - kRowWidth) / 2.0F;
 
-constexpr const char* kHome = "\xF0\x9F\x8F\xA0";  // 🏠
 constexpr const char* kReset = "\xF0\x9F\x94\x84"; // 🔄
 
 // Difficulty -> board pool index (Easy=0, Medium=1, Hard=2, VeryHard=3).
@@ -95,35 +90,31 @@ int blockFillSavedLevel(Difficulty difficulty) {
 BlockFillScene::BlockFillScene(SceneManager& manager, Difficulty difficulty, int level)
     : manager_(manager), difficulty_(difficulty), level_(std::max(1, level)),
       board_(boardFor(difficulty, level)),
-      homeButton_(kHome, kRowX, kButtonRowY, kHomeSize, kHomeSize),
-      nextButton_("NEXT", kRowX + kHomeSize + kButtonGap, kButtonRowY, kNextW, kHomeSize) {
-    homeButton_.setColors(colors::white, colors::panelBrown);
-    homeButton_.setOnTap([this] { manager_.popToRoot(); });
-    nextButton_.setColors(color(difficulty_), colors::white);
+      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      resetButton_(IconButton::Icon::Glyph, kResetCx, kResetCy, kResetRadius),
+      overlay_(color(difficulty_), colors::white, kButtonRowY) {
+    backButton_.setOnTap([this] { manager_.pop(); });
+    resetButton_.setGlyph(kReset, 54.0F);
+    resetButton_.setOnTap([this] {
+        board_.reset();
+        dragging_ = false;
+    });
+    overlay_.setOnHome([this] { manager_.popToRoot(); });
     // The action button's label/handler are set per result in onSolved().
     layoutBoard();
 }
 
 void BlockFillScene::layoutBoard() {
-    const auto gw = static_cast<float>(board_.width());
-    const auto gh = static_cast<float>(board_.height());
-    cellPx_ = std::min({kAreaW / gw, kAreaH / gh, kMaxCellPx});
-    originX_ = kAreaX + ((kAreaW - (gw * cellPx_)) / 2.0F);
-    originY_ = kAreaTop + ((kAreaH - (gh * cellPx_)) / 2.0F);
+    const grid::Fit fit = grid::fitCentered(kAreaX, kAreaTop, kAreaW, kAreaH, board_.width(),
+                                            board_.height(), kMaxCellPx);
+    cellPx_ = fit.cellPx;
+    originX_ = fit.originX;
+    originY_ = fit.originY;
 }
 
 bool BlockFillScene::cellAt(float px, float py, int& x, int& y) const {
-    if (px < originX_ || py < originY_) {
-        return false;
-    }
-    const int c = static_cast<int>((px - originX_) / cellPx_);
-    const int r = static_cast<int>((py - originY_) / cellPx_);
-    if (!board_.isPlayable(c, r)) {
-        return false;
-    }
-    x = c;
-    y = r;
-    return true;
+    const grid::Fit fit{.cellPx = cellPx_, .originX = originX_, .originY = originY_};
+    return grid::cellAt(fit, px, py, x, y) && board_.isPlayable(x, y);
 }
 
 float BlockFillScene::cellCenterX(int x) const {
@@ -132,45 +123,6 @@ float BlockFillScene::cellCenterX(int x) const {
 
 float BlockFillScene::cellCenterY(int y) const {
     return originY_ + ((static_cast<float>(y) + 0.5F) * cellPx_);
-}
-
-bool BlockFillScene::handleBackButton(const PointerEvent& event) {
-    if (event.phase == PointerEvent::Phase::Move) {
-        return false;
-    }
-    const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
-                                kBackRadius * 2.0F, kBackRadius * 2.0F);
-    if (event.phase == PointerEvent::Phase::Down) {
-        backPressed_ = inside;
-        return inside;
-    }
-    const bool wasPressed = backPressed_;
-    backPressed_ = false;
-    if (wasPressed && inside) {
-        manager_.pop();
-        return true;
-    }
-    return false;
-}
-
-bool BlockFillScene::handleResetButton(const PointerEvent& event) {
-    if (event.phase == PointerEvent::Phase::Move) {
-        return false;
-    }
-    const bool inside = hitTest(event, kResetCx - kResetRadius, kResetCy - kResetRadius,
-                                kResetRadius * 2.0F, kResetRadius * 2.0F);
-    if (event.phase == PointerEvent::Phase::Down) {
-        resetPressed_ = inside;
-        return inside;
-    }
-    const bool wasPressed = resetPressed_;
-    resetPressed_ = false;
-    if (wasPressed && inside) {
-        board_.reset();
-        dragging_ = false;
-        return true;
-    }
-    return false;
 }
 
 void BlockFillScene::handleDrag(const PointerEvent& event) {
@@ -208,17 +160,14 @@ void BlockFillScene::handleDrag(const PointerEvent& event) {
 }
 
 void BlockFillScene::handleInput(const PointerEvent& event) {
-    if (handleBackButton(event)) {
+    if (backButton_.handleInput(event)) {
         return;
     }
     if (phase_ == Phase::Solved) {
-        if (homeButton_.handleInput(event)) {
-            return;
-        }
-        nextButton_.handleInput(event);
+        overlay_.handleInput(event);
         return;
     }
-    if (handleResetButton(event)) {
+    if (resetButton_.handleInput(event)) {
         return;
     }
     handleDrag(event);
@@ -238,33 +187,22 @@ void BlockFillScene::onSolved() {
         setSavedLevel(difficulty_, level_ + 1);
     }
     if (level_ < lastLevel) {
-        nextButton_.setLabel("NEXT");
-        nextButton_.setOnTap([this] {
+        overlay_.setActionLabel("NEXT");
+        overlay_.setOnAction([this] {
             manager_.replace(std::make_unique<BlockFillScene>(manager_, difficulty_, level_ + 1));
         });
     } else {
-        nextButton_.setLabel("REPLAY");
-        nextButton_.setOnTap([this] {
+        overlay_.setActionLabel("REPLAY");
+        overlay_.setOnAction([this] {
             board_.reset();
             phase_ = Phase::Playing;
         });
     }
 }
 
-void BlockFillScene::drawBackButton(Canvas& canvas) {
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
-}
-
-void BlockFillScene::drawResetButton(Canvas& canvas) {
-    canvas.fillCircle(kResetCx, kResetCy, kResetRadius, theme().backCircle);
-    canvas.emojiCentered(kReset, kResetCx, kResetCy, 54.0F);
-}
-
 void BlockFillScene::drawTopBar(Canvas& canvas) const {
-    drawBackButton(canvas);
-    drawResetButton(canvas);
+    backButton_.render(canvas);
+    resetButton_.render(canvas);
     canvas.textCentered(label(difficulty_), layout::kWidthF / 2.0F, kDiffLabelCy, 30.0F,
                         color(difficulty_));
     canvas.textCentered("Level " + std::to_string(level_), layout::kWidthF / 2.0F, kLevelLabelCy,
@@ -319,10 +257,7 @@ void BlockFillScene::drawRope(Canvas& canvas) const {
 }
 
 void BlockFillScene::drawOverlay(Canvas& canvas) const {
-    canvas.fillRect(0.0F, 0.0F, layout::kWidthF, layout::kHeightF, colors::overlay);
-    canvas.textCentered("SOLVED!", layout::kWidthF / 2.0F, 600.0F, 96.0F, colors::white);
-    homeButton_.render(canvas);
-    nextButton_.render(canvas);
+    overlay_.render(canvas, "SOLVED!", 600.0F, 96.0F);
 }
 
 void BlockFillScene::render(Canvas& canvas) {

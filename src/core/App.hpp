@@ -33,8 +33,11 @@ public:
     SceneManager& scenes() { return scenes_; }
 
 private:
-    void processEvents();
-    void dispatchPointer(const SDL_Event& converted);
+    // processEvents returns whether a pointer event was dispatched to a scene
+    // this frame; dispatchPointer returns whether it dispatched one. The idle
+    // render loop uses these to decide if a static scene needs redrawing.
+    bool processEvents();
+    bool dispatchPointer(const SDL_Event& converted);
 
     WindowPtr window_;
     RendererPtr renderer_;
@@ -43,6 +46,9 @@ private:
     SceneManager scenes_;
     bool ttfReady_ = false;
     bool running_ = false;
+    // Forces a draw next frame regardless of scene animation state: set on the
+    // first frame, on a window resize/expose, and after a scene push/pop/replace.
+    bool needsRedraw_ = true;
 };
 
 } // namespace og

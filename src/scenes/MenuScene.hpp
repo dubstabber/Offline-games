@@ -20,6 +20,8 @@ public:
     void handleInput(const PointerEvent& event) override;
     void update(float dtSeconds) override;
     void render(Canvas& canvas) override;
+    // Static at rest; animates only while dragging or during a fling glide.
+    [[nodiscard]] bool isAnimating() const override;
 
 private:
     struct Card {

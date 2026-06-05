@@ -24,6 +24,16 @@ add_executable(test_settings test_settings.cpp)
 target_link_libraries(test_settings PRIVATE engine)
 add_test(NAME settings COMMAND test_settings)
 
+# Header-only utility checks (Easing, GridLayout, FixedTimestep). They link engine
+# only to reuse its include path; the units under test are header-only.
+add_executable(test_easing test_easing.cpp)
+target_link_libraries(test_easing PRIVATE engine)
+add_test(NAME easing COMMAND test_easing)
+
+add_executable(test_gridlayout test_gridlayout.cpp)
+target_link_libraries(test_gridlayout PRIVATE engine)
+add_test(NAME gridlayout COMMAND test_gridlayout)
+
 add_executable(test_minesweeper test_minesweeper.cpp)
 target_link_libraries(test_minesweeper PRIVATE engine)
 add_test(NAME minesweeper COMMAND test_minesweeper)

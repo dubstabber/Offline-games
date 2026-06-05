@@ -57,7 +57,9 @@ SettingsScene::SettingsScene(SceneManager& manager)
                  static_cast<float>(kFpsStops.back())),
       volumeSlider_(kTrackX, kVolumeTrackCy, kTrackW, 0.0F, 1.0F),
       musicToggle_(kToggleX, toggleY(kMusicRowCy), kToggleW, kToggleH),
-      vibrationToggle_(kToggleX, toggleY(kVibrationRowCy), kToggleW, kToggleH) {
+      vibrationToggle_(kToggleX, toggleY(kVibrationRowCy), kToggleW, kToggleH),
+      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius) {
+    backButton_.setOnTap([this] { manager_.pop(); });
     darkToggle_.setValue(settings().darkMode);
     darkToggle_.setOnChange([this](bool on) {
         settings().darkMode = on;
@@ -95,27 +97,8 @@ SettingsScene::SettingsScene(SceneManager& manager)
     });
 }
 
-bool SettingsScene::handleBackButton(const PointerEvent& event) {
-    if (event.phase == PointerEvent::Phase::Move) {
-        return false;
-    }
-    const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
-                                kBackRadius * 2.0F, kBackRadius * 2.0F);
-    if (event.phase == PointerEvent::Phase::Down) {
-        backPressed_ = inside;
-        return inside;
-    }
-    const bool wasPressed = backPressed_;
-    backPressed_ = false;
-    if (wasPressed && inside) {
-        manager_.pop();
-        return true;
-    }
-    return false;
-}
-
 void SettingsScene::handleInput(const PointerEvent& event) {
-    if (handleBackButton(event)) {
+    if (backButton_.handleInput(event)) {
         return;
     }
     // The controls don't overlap, so dispatching to each is harmless; each only
@@ -138,10 +121,7 @@ void SettingsScene::update(float /*dtSeconds*/) {}
 void SettingsScene::render(Canvas& canvas) {
     canvas.clear(theme().menuBg);
 
-    // Back button.
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
+    backButton_.render(canvas);
 
     canvas.textCentered("SETTINGS", layout::kWidthF / 2.0F, 150.0F, 64.0F, theme().titleText);
 

@@ -2,6 +2,7 @@
 
 #include "core/Canvas.hpp"
 #include "core/Color.hpp"
+#include "core/FixedTimestep.hpp"
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
@@ -33,16 +34,10 @@ constexpr float kBoostCx = layout::kWidthF - 120.0F;
 constexpr float kBoostCy = layout::kHeightF - 170.0F;
 constexpr float kBoostR = 92.0F;
 
-// Game-over overlay buttons — same row layout as the other games.
+// Game-over overlay row position.
 constexpr float kButtonRowY = 820.0F;
-constexpr float kHomeSize = 140.0F;
-constexpr float kRetryW = 360.0F;
-constexpr float kButtonGap = 24.0F;
-constexpr float kRowWidth = kHomeSize + kButtonGap + kRetryW;
-constexpr float kRowX = (layout::kWidthF - kRowWidth) / 2.0F;
 
-constexpr const char* kHome = "\xF0\x9F\x8F\xA0"; // 🏠
-constexpr const char* kBolt = "\xE2\x9A\xA1";     // ⚡
+constexpr const char* kBolt = "\xE2\x9A\xA1"; // ⚡
 
 // ---- Camera tuning ----------------------------------------------------------
 constexpr float kBaseZoom = 1.0F;
@@ -95,36 +90,18 @@ SnakeScene::SnakeScene(SceneManager& manager, Difficulty difficulty)
     : manager_(manager), difficulty_(difficulty),
       world_(difficultyToIndex(difficulty), std::random_device{}()),
       ghost_(std::random_device{}(), kGhostCount), camX_(world_.player().head.x),
-      camY_(world_.player().head.y), bestScore_(snakeBestField(settings(), difficulty)),
-      homeButton_(kHome, kRowX, kButtonRowY, kHomeSize, kHomeSize),
-      retryButton_("RETRY", kRowX + kHomeSize + kButtonGap, kButtonRowY, kRetryW, kHomeSize) {
-    homeButton_.setColors(colors::white, colors::panelBrown);
-    homeButton_.setOnTap([this] { manager_.popToRoot(); });
-    retryButton_.setColors(color(difficulty_), colors::white);
-    retryButton_.setOnTap(
+      camY_(world_.player().head.y),
+      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      bestScore_(snakeBestField(settings(), difficulty)),
+      overlay_(color(difficulty_), colors::white, kButtonRowY) {
+    backButton_.setOnTap([this] { manager_.pop(); });
+    overlay_.setOnHome([this] { manager_.popToRoot(); });
+    overlay_.setActionLabel("RETRY");
+    overlay_.setOnAction(
         [this] { manager_.replace(std::make_unique<SnakeScene>(manager_, difficulty_)); });
 }
 
 // ---- Input ------------------------------------------------------------------
-
-bool SnakeScene::handleBackButton(const PointerEvent& event) {
-    if (event.phase == PointerEvent::Phase::Move) {
-        return false;
-    }
-    const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
-                                kBackRadius * 2.0F, kBackRadius * 2.0F);
-    if (event.phase == PointerEvent::Phase::Down) {
-        backPressed_ = inside;
-        return inside;
-    }
-    const bool wasPressed = backPressed_;
-    backPressed_ = false;
-    if (wasPressed && inside) {
-        manager_.pop();
-        return true;
-    }
-    return false;
-}
 
 bool SnakeScene::handleBoostButton(const PointerEvent& event) {
     const float dx = event.x - kBoostCx;
@@ -162,14 +139,11 @@ void SnakeScene::handleSteer(const PointerEvent& event) {
 }
 
 void SnakeScene::handleInput(const PointerEvent& event) {
-    if (handleBackButton(event)) {
+    if (backButton_.handleInput(event)) {
         return;
     }
     if (phase_ == Phase::GameOver) {
-        if (homeButton_.handleInput(event)) {
-            return;
-        }
-        retryButton_.handleInput(event);
+        overlay_.handleInput(event);
         return;
     }
     if (handleBoostButton(event)) {
@@ -187,11 +161,7 @@ void SnakeScene::update(float dtSeconds) {
                                       : p.head + (snake::fromAngle(p.heading) * 100.0F);
         world_.setPlayerInput({.aimWorld = aimWorld, .boost = boosting_});
 
-        accum_ += std::min(dtSeconds, cfg::kMaxAccumDt);
-        while (accum_ >= cfg::kFixedDt) {
-            world_.step();
-            accum_ -= cfg::kFixedDt;
-        }
+        advanceFixed(accum_, dtSeconds, cfg::kFixedDt, cfg::kMaxAccumDt, [this] { world_.step(); });
         if (!world_.playerAlive()) {
             enterGameOver();
         }
@@ -329,7 +299,7 @@ void SnakeScene::drawSnake(Canvas& canvas, const snake::Snake& s, bool isPlayer)
 }
 
 void SnakeScene::drawHud(Canvas& canvas) const {
-    drawBackButton(canvas);
+    backButton_.render(canvas);
     const float cx = layout::kWidthF * 0.5F;
     canvas.textCentered(label(difficulty_), cx, 42.0F, 26.0F, color(difficulty_));
     canvas.textCentered(std::to_string(world_.playerScore()), cx, 100.0F, 64.0F, colors::white);
@@ -379,20 +349,11 @@ void SnakeScene::drawBoostButton(Canvas& canvas) const {
 }
 
 void SnakeScene::drawOverlay(Canvas& canvas) const {
-    canvas.fillRect(0.0F, 0.0F, layout::kWidthF, layout::kHeightF, colors::overlay);
-    canvas.textCentered("GAME OVER", layout::kWidthF / 2.0F, 520.0F, 88.0F, colors::white);
+    overlay_.render(canvas, "GAME OVER", 520.0F, 88.0F);
     canvas.textCentered("SCORE  " + std::to_string(finalScore_), layout::kWidthF / 2.0F, 632.0F,
                         44.0F, colors::white);
     canvas.textCentered("BEST  " + std::to_string(bestScore_), layout::kWidthF / 2.0F, 692.0F,
                         34.0F, colors::botCyan);
-    homeButton_.render(canvas);
-    retryButton_.render(canvas);
-}
-
-void SnakeScene::drawBackButton(Canvas& canvas) {
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
 }
 
 void SnakeScene::render(Canvas& canvas) {

@@ -58,10 +58,10 @@ bool App::init() {
     return true;
 }
 
-void App::dispatchPointer(const SDL_Event& converted) {
+bool App::dispatchPointer(const SDL_Event& converted) {
     Scene* scene = scenes_.current();
     if (scene == nullptr) {
-        return;
+        return false;
     }
     // SDL cross-generates events between touch and mouse: a finger touch also
     // arrives as a synthetic mouse event (which == SDL_TOUCH_MOUSEID), and a mouse
@@ -74,7 +74,7 @@ void App::dispatchPointer(const SDL_Event& converted) {
     case SDL_EVENT_MOUSE_BUTTON_UP:
         if (converted.button.button != SDL_BUTTON_LEFT ||
             converted.button.which == SDL_TOUCH_MOUSEID) {
-            return;
+            return false;
         }
         pointer.phase = converted.type == SDL_EVENT_MOUSE_BUTTON_DOWN ? PointerEvent::Phase::Down
                                                                       : PointerEvent::Phase::Up;
@@ -84,7 +84,7 @@ void App::dispatchPointer(const SDL_Event& converted) {
     case SDL_EVENT_FINGER_DOWN:
     case SDL_EVENT_FINGER_UP:
         if (converted.tfinger.touchID == SDL_MOUSE_TOUCHID) {
-            return;
+            return false;
         }
         pointer.phase = converted.type == SDL_EVENT_FINGER_DOWN ? PointerEvent::Phase::Down
                                                                 : PointerEvent::Phase::Up;
@@ -93,7 +93,7 @@ void App::dispatchPointer(const SDL_Event& converted) {
         break;
     case SDL_EVENT_MOUSE_MOTION:
         if (converted.motion.which == SDL_TOUCH_MOUSEID) {
-            return;
+            return false;
         }
         pointer.phase = PointerEvent::Phase::Move;
         pointer.x = converted.motion.x;
@@ -101,30 +101,45 @@ void App::dispatchPointer(const SDL_Event& converted) {
         break;
     case SDL_EVENT_FINGER_MOTION:
         if (converted.tfinger.touchID == SDL_MOUSE_TOUCHID) {
-            return;
+            return false;
         }
         pointer.phase = PointerEvent::Phase::Move;
         pointer.x = converted.tfinger.x;
         pointer.y = converted.tfinger.y;
         break;
     default:
-        return;
+        return false;
     }
     scene->handleInput(pointer);
+    return true;
 }
 
-void App::processEvents() {
+bool App::processEvents() {
+    bool dispatched = false;
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
-        if (event.type == SDL_EVENT_QUIT) {
+        switch (event.type) {
+        case SDL_EVENT_QUIT:
             running_ = false;
             continue;
+        case SDL_EVENT_WINDOW_EXPOSED:
+        case SDL_EVENT_WINDOW_RESIZED:
+        case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+        case SDL_EVENT_WINDOW_SHOWN:
+            // The compositor may have discarded the window contents; redraw once.
+            needsRedraw_ = true;
+            continue;
+        default:
+            break;
         }
         // Map window/normalized coordinates into the logical canvas space so
         // scenes work purely in logical pixels.
         SDL_ConvertEventToRenderCoordinates(renderer_.get(), &event);
-        dispatchPointer(event);
+        if (dispatchPointer(event)) {
+            dispatched = true;
+        }
     }
+    return dispatched;
 }
 
 void App::run() {
@@ -142,16 +157,26 @@ void App::run() {
         const float dtSeconds = static_cast<float>(nowTicks - previousTicks) / 1000.0F;
         previousTicks = nowTicks;
 
-        processEvents();
+        const bool inputThisFrame = processEvents();
 
         if (Scene* scene = scenes_.current()) {
+            const bool wasAnimating = scene->isAnimating();
             scene->update(dtSeconds);
-            canvas_->clear(theme().appBg);
-            scene->render(*canvas_);
-            SDL_RenderPresent(renderer_.get());
+            // Conservative idle: a static scene (a menu/settings screen at rest)
+            // with no input and nothing forcing a redraw skips the draw and
+            // present, so it stops driving the PinePhone's GPU when nothing
+            // changed. wasAnimating covers the frame a fling settles to a stop.
+            if (needsRedraw_ || inputThisFrame || wasAnimating || scene->isAnimating()) {
+                canvas_->clear(theme().appBg);
+                scene->render(*canvas_);
+                SDL_RenderPresent(renderer_.get());
+                needsRedraw_ = false;
+            }
         }
 
-        scenes_.applyPending();
+        if (scenes_.applyPending()) {
+            needsRedraw_ = true; // a push/pop/replace revealed a (possibly static) scene
+        }
 
         // Frame cap driven by the Maximum FPS setting (always a valid stop, so
         // never zero). Sleep only the time left in this frame's budget, measured

@@ -24,7 +24,8 @@ Scene* SceneManager::current() const {
     return scenes_.empty() ? nullptr : scenes_.back().get();
 }
 
-void SceneManager::applyPending() {
+bool SceneManager::applyPending() {
+    const bool changed = pending_ != Action::None;
     switch (pending_) {
     case Action::Push:
         scenes_.push_back(std::move(pendingScene_));
@@ -50,6 +51,7 @@ void SceneManager::applyPending() {
     }
     pending_ = Action::None;
     pendingScene_.reset();
+    return changed;
 }
 
 } // namespace og

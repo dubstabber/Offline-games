@@ -9,6 +9,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Export compile_commands.json for clang-tidy / editors.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# ---- Link-time optimization (Release only, portable) -------------------------
+# Turn on IPO/LTO for optimized builds wherever the toolchain supports it (GCC,
+# Clang, MSVC). Scoped to the Release config via the per-config variable so the
+# Debug/dev builds stay fast to compile; this applies to both the desktop
+# `release` preset and the `release-phone` preset.
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+if(ipo_supported)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+else()
+    message(STATUS "IPO/LTO not supported, building without it: ${ipo_error}")
+endif()
+
 # ---- Warnings ----------------------------------------------------------------
 # Strict by default; the `dev` preset turns these into errors via
 # WARNINGS_AS_ERRORS. Flags are compiler-specific so MSVC builds still work.
@@ -41,7 +54,9 @@ add_library(engine STATIC
     src/core/Settings.cpp
     src/core/Theme.cpp
     src/ui/Button.cpp
+    src/ui/IconButton.cpp
     src/ui/Label.cpp
+    src/ui/ResultOverlay.cpp
     src/ui/Toggle.cpp
     src/ui/Slider.cpp
     src/games/GameRegistry.cpp

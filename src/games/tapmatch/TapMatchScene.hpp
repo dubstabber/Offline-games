@@ -3,7 +3,8 @@
 #include "core/Scene.hpp"
 #include "games/Difficulty.hpp"
 #include "games/tapmatch/TapMatchBoard.hpp"
-#include "ui/Button.hpp"
+#include "ui/IconButton.hpp"
+#include "ui/ResultOverlay.hpp"
 
 #include <cstdint>
 #include <string>
@@ -37,7 +38,6 @@ private:
     // buttons respond.
     enum class Phase : std::uint8_t { Playing, GameOver };
 
-    bool handleBackButton(const PointerEvent& event);
     void beginRound();
     void enterGameOver();
     // Fit the current board's tile extent into the play area: pick a cell size
@@ -50,7 +50,6 @@ private:
     [[nodiscard]] std::string statusText() const;
     [[nodiscard]] const char* resultText() const;
 
-    static void drawBackButton(Canvas& canvas);
     void drawTopBar(Canvas& canvas) const;
     void drawBoard(Canvas& canvas) const;
     static void drawHolder(Canvas& canvas);
@@ -109,9 +108,8 @@ private:
     float boardOriginX_ = 56.0F;
     float boardOriginY_ = 200.0F;
     Phase phase_ = Phase::Playing;
-    bool backPressed_ = false;
-    Button homeButton_;
-    Button playAgainButton_;
+    IconButton backButton_;
+    ResultOverlay overlay_;
 
     std::vector<TrayTile> tray_;  // holder fruit (settled, arriving, and popping)
     std::vector<FlyTile> flying_; // fruit in flight to the holder

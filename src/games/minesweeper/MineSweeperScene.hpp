@@ -3,7 +3,8 @@
 #include "core/Scene.hpp"
 #include "games/Difficulty.hpp"
 #include "games/minesweeper/MineSweeperBoard.hpp"
-#include "ui/Button.hpp"
+#include "ui/IconButton.hpp"
+#include "ui/ResultOverlay.hpp"
 
 #include <cstdint>
 
@@ -30,8 +31,6 @@ private:
     // Playing: taps reveal/flag/chord. GameOver: only the result overlay responds.
     enum class Phase : std::uint8_t { Playing, GameOver };
 
-    bool handleBackButton(const PointerEvent& event);
-    bool handleResetButton(const PointerEvent& event);
     bool handleModeToggle(const PointerEvent& event);
     void handleBoardTap(const PointerEvent& event);
 
@@ -42,8 +41,6 @@ private:
     [[nodiscard]] bool cellAt(float px, float py, int& row, int& col) const;
     [[nodiscard]] const char* resultText() const;
 
-    static void drawBackButton(Canvas& canvas);
-    static void drawResetButton(Canvas& canvas);
     void drawTopBar(Canvas& canvas) const;
     void drawBoard(Canvas& canvas) const;
     void drawBottomBar(Canvas& canvas) const;
@@ -54,8 +51,8 @@ private:
     MineSweeperBoard board_;
     Phase phase_ = Phase::Playing;
     bool flagging_ = false; // false = dig/reveal mode, true = flag mode
-    bool backPressed_ = false;
-    bool resetPressed_ = false;
+    IconButton backButton_;
+    IconButton resetButton_;
     bool recorded_ = false; // streak already recorded for this game-over
     int currentStreak_ = 0;
     int bestStreak_ = 0;
@@ -65,8 +62,7 @@ private:
     float originX_ = 0.0F;
     float originY_ = 0.0F;
 
-    Button homeButton_;
-    Button playAgainButton_;
+    ResultOverlay overlay_;
 };
 
 } // namespace og

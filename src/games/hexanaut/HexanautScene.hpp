@@ -5,7 +5,8 @@
 #include "games/Difficulty.hpp"
 #include "games/hexanaut/HexTypes.hpp"
 #include "games/hexanaut/HexWorld.hpp"
-#include "ui/Button.hpp"
+#include "ui/IconButton.hpp"
+#include "ui/ResultOverlay.hpp"
 
 #include <cstdint>
 #include <random>
@@ -42,12 +43,10 @@ private:
     [[nodiscard]] hexanaut::Vec2 screenToWorld(float sx, float sy) const;
     [[nodiscard]] static hexanaut::Vec2 avatarWorld(const hexanaut::Player& p);
 
-    bool handleBackButton(const PointerEvent& event);
     void handleSteer(const PointerEvent& event);
     void enterGameOver();
     void updateCamera(float dtSeconds);
 
-    static void drawBackButton(Canvas& canvas);
     // Append a hex top face. The face is gradient-shaded from a lit north edge
     // (colorTop) down to a darker south edge (colorBottom) for a bevelled look;
     // pass the same color twice for a flat fill.
@@ -150,7 +149,7 @@ private:
 
     hexanaut::Vec2 aimScreen_; // last pointer position (logical px) used to steer
     bool hasAim_ = false;
-    bool backPressed_ = false;
+    IconButton backButton_;
 
     Phase phase_ = Phase::Playing;
     bool recorded_ = false;
@@ -172,11 +171,11 @@ private:
     float fxSpawnAccum_ = 0.0F;       // dt accumulator pacing spark bursts
     std::mt19937 fxRng_;              // visual-only jitter (fixed seed; not gameplay)
 
-    std::vector<Laser> lasers_;            // live (fading) shooter bolts
-    std::vector<std::uint32_t> shotSeen_;  // last-seen shotCount per shooter (parallel to shooters())
+    std::vector<Laser> lasers_; // live (fading) shooter bolts
+    std::vector<std::uint32_t>
+        shotSeen_; // last-seen shotCount per shooter (parallel to shooters())
 
-    Button homeButton_;
-    Button retryButton_;
+    ResultOverlay overlay_;
 };
 
 } // namespace og

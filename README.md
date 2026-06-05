@@ -35,12 +35,18 @@ pacman -S mingw-w64-ucrt-x86_64-{toolchain,cmake,ninja,SDL3,SDL3_ttf}
 Then, on any platform:
 
 ```sh
-cmake --preset dev          # presets: debug | release | dev
+cmake --preset dev          # presets: debug | release | release-phone | dev
 cmake --build build/dev
 ./build/dev/offline-games    # Windows: build/dev/offline-games.exe
 ```
 
-- **`release`** — optimized build to deploy on the phone.
+- **`release`** — optimized, portable build (link-time optimization is enabled
+  automatically where the toolchain supports it). Deploy this on the phone, or
+  use it on the desktop.
+- **`release-phone`** — `release` plus PinePhone CPU tuning (`-mcpu=cortex-a53`).
+  Only valid when compiling on the phone itself or with an aarch64 toolchain (an
+  x86 compiler rejects the flag), so it is a separate, opt-in preset and never
+  the default.
 - **`dev`** — Debug with warnings-as-errors (`WARNINGS_AS_ERRORS=ON`); use it
   while developing. Warning flags are compiler-specific, so GCC, Clang and MSVC
   all build cleanly.
@@ -59,6 +65,10 @@ scripts/run-phone-next-workspace.sh --release
 
 Without a preset flag, the script uses the first executable it finds in
 `build/release`, `build/dev`, then `build/debug`.
+
+> Building **on the PinePhone** (or with an aarch64 cross-toolchain)? Configure
+> the `release-phone` preset instead for Cortex-A53 tuning; the binary lands in
+> `build/release-phone/`.
 
 Run the tests (pure game logic, no display needed):
 

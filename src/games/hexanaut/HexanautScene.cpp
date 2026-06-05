@@ -2,6 +2,7 @@
 
 #include "core/Canvas.hpp"
 #include "core/Color.hpp"
+#include "core/FixedTimestep.hpp"
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
@@ -40,14 +41,8 @@ constexpr float kBackCx = 92.0F;
 constexpr float kBackCy = 100.0F;
 constexpr float kBackRadius = 56.0F;
 
-// Game-over overlay buttons — same row layout as the other games.
+// Game-over overlay row position.
 constexpr float kButtonRowY = 820.0F;
-constexpr float kHomeSize = 140.0F;
-constexpr float kRetryW = 360.0F;
-constexpr float kButtonGap = 24.0F;
-constexpr float kRowWidth = kHomeSize + kButtonGap + kRetryW;
-constexpr float kRowX = (layout::kWidthF - kRowWidth) / 2.0F;
-constexpr const char* kHome = "\xF0\x9F\x8F\xA0"; // 🏠
 
 constexpr float kFollowRate = cfg::kFollowRate;
 
@@ -132,8 +127,8 @@ constexpr float kSpeedMin = 30.0F; // outward drift, world units/sec
 constexpr float kSpeedMax = 110.0F;
 constexpr float kLiftVelMin = 60.0F; // initial pop upward
 constexpr float kLiftVelMax = 150.0F;
-constexpr float kGravity = 300.0F;  // pulls the lift back toward the ground
-constexpr float kSizeMin = 4.0F;    // square half-extent is size*0.5, in logical px @ zoom 1
+constexpr float kGravity = 300.0F; // pulls the lift back toward the ground
+constexpr float kSizeMin = 4.0F;   // square half-extent is size*0.5, in logical px @ zoom 1
 constexpr float kSizeMax = 9.0F;
 constexpr float kSpawnJitter = 14.0F; // scatter around the avatar, world units
 constexpr float kOnScreenMargin = 60.0F;
@@ -158,19 +153,19 @@ constexpr float kFallSpeed = 95.0F; // world units/sec
 HexanautScene::HexanautScene(SceneManager& manager, Difficulty difficulty)
     : manager_(manager), difficulty_(difficulty),
       world_(difficultyToIndex(difficulty), std::random_device{}()),
+      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
       bestPercent_(static_cast<float>(hexanautBestField(settings(), difficulty)) / 10.0F),
       // seed with the starting home territory (world_ is constructed before this)
       lastLivePercent_(world_.playerPercent()),
-      homeButton_(kHome, kRowX, kButtonRowY, kHomeSize, kHomeSize),
-      retryButton_("RETRY", kRowX + kHomeSize + kButtonGap, kButtonRowY, kRetryW, kHomeSize) {
+      overlay_(color(difficulty_), colors::white, kButtonRowY) {
     const Vec2 c = avatarWorld(world_.player());
     camX_ = c.x;
     camY_ = c.y;
 
-    homeButton_.setColors(colors::white, colors::panelBrown);
-    homeButton_.setOnTap([this] { manager_.popToRoot(); });
-    retryButton_.setColors(color(difficulty_), colors::white);
-    retryButton_.setOnTap(
+    backButton_.setOnTap([this] { manager_.pop(); });
+    overlay_.setOnHome([this] { manager_.popToRoot(); });
+    overlay_.setActionLabel("RETRY");
+    overlay_.setOnAction(
         [this] { manager_.replace(std::make_unique<HexanautScene>(manager_, difficulty_)); });
 }
 
@@ -191,25 +186,6 @@ Vec2 HexanautScene::avatarWorld(const Player& p) {
 
 // ---- Input ------------------------------------------------------------------
 
-bool HexanautScene::handleBackButton(const PointerEvent& event) {
-    if (event.phase == PointerEvent::Phase::Move) {
-        return false;
-    }
-    const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
-                                kBackRadius * 2.0F, kBackRadius * 2.0F);
-    if (event.phase == PointerEvent::Phase::Down) {
-        backPressed_ = inside;
-        return inside;
-    }
-    const bool wasPressed = backPressed_;
-    backPressed_ = false;
-    if (wasPressed && inside) {
-        manager_.pop();
-        return true;
-    }
-    return false;
-}
-
 void HexanautScene::handleSteer(const PointerEvent& event) {
     if (event.phase == PointerEvent::Phase::Up) {
         return; // keep the last heading after the finger lifts
@@ -219,14 +195,11 @@ void HexanautScene::handleSteer(const PointerEvent& event) {
 }
 
 void HexanautScene::handleInput(const PointerEvent& event) {
-    if (handleBackButton(event)) {
+    if (backButton_.handleInput(event)) {
         return;
     }
     if (phase_ == Phase::GameOver) {
-        if (homeButton_.handleInput(event)) {
-            return;
-        }
-        retryButton_.handleInput(event);
+        overlay_.handleInput(event);
         return;
     }
     handleSteer(event);
@@ -246,14 +219,12 @@ void HexanautScene::update(float dtSeconds) {
                 world_.setPlayerDesiredAngle(hexanaut::angleOf(dir));
             }
         }
-        accum_ += std::min(dtSeconds, cfg::kMaxAccumDt);
-        while (accum_ >= cfg::kFixedDt) {
+        advanceFixed(accum_, dtSeconds, cfg::kFixedDt, cfg::kMaxAccumDt, [this] {
             world_.step();
-            accum_ -= cfg::kFixedDt;
             if (world_.playerAlive()) {
                 lastLivePercent_ = world_.playerPercent(); // remember it before any fatal step
             }
-        }
+        });
         spawnCutFx(dtSeconds);
         if (!world_.playerAlive()) {
             enterGameOver();
@@ -637,10 +608,10 @@ void HexanautScene::drawShooters(Canvas& canvas) const {
         const ScreenPos b = toScreen(l.to, cfg::kPrismLift + 4.0F);    // the cell it hit
         const float beamW = std::max(3.0F, kS * zoom_ * 0.2F);
         const auto alpha = [&](float base) { return static_cast<std::uint8_t>(base * fade); };
-        canvas.line(a.x, a.y, b.x, b.y, beamW * 2.4F, pal::withAlpha(col, alpha(70.0F)));  // glow
-        canvas.line(a.x, a.y, b.x, b.y, beamW, pal::withAlpha(col, alpha(200.0F)));        // body
+        canvas.line(a.x, a.y, b.x, b.y, beamW * 2.4F, pal::withAlpha(col, alpha(70.0F))); // glow
+        canvas.line(a.x, a.y, b.x, b.y, beamW, pal::withAlpha(col, alpha(200.0F)));       // body
         canvas.line(a.x, a.y, b.x, b.y, std::max(1.5F, beamW * 0.4F),
-                    pal::withAlpha(pal::lighten(col, 0.6F), alpha(240.0F)));               // hot core
+                    pal::withAlpha(pal::lighten(col, 0.6F), alpha(240.0F))); // hot core
         // Impact flash blooms outward a touch as it dies.
         const float flashR = beamW * (1.5F + ((1.0F - fade) * 1.4F));
         canvas.fillCircle(b.x, b.y, flashR, pal::withAlpha(pal::lighten(col, 0.3F), alpha(190.0F)));
@@ -679,7 +650,8 @@ void HexanautScene::drawShooters(Canvas& canvas) const {
         }};
         canvas.fillConvexPolygon(gem);
         // Bright rim edges + a glowing core facet.
-        const Color rim = pal::withAlpha(active ? pal::lighten(col, 0.25F) : rgb(196, 200, 210), 205);
+        const Color rim =
+            pal::withAlpha(active ? pal::lighten(col, 0.25F) : rgb(196, 200, 210), 205);
         const float rimW = std::max(1.5F, kS * zoom_ * 0.05F);
         for (std::size_t k = 0; k < 4; ++k) {
             const Canvas::Vertex& a = gem.at(k);
@@ -695,9 +667,9 @@ void HexanautScene::appendSnowflake(float sx, float sy, float size, Color color)
     constexpr float kThird = std::numbers::pi_v<float> / 3.0F; // 60 degrees between bars
     for (int b = 0; b < 3; ++b) {
         const float ang = static_cast<float>(b) * kThird;
-        const float ax = std::cos(ang) * size;             // half-length along the bar
+        const float ax = std::cos(ang) * size; // half-length along the bar
         const float ay = std::sin(ang) * size;
-        const float px = -std::sin(ang) * (size * 0.26F);  // half-width across it
+        const float px = -std::sin(ang) * (size * 0.26F); // half-width across it
         const float py = std::cos(ang) * (size * 0.26F);
         const auto base = static_cast<int>(meshVerts_.size());
         meshVerts_.push_back({.x = sx + ax + px, .y = sy + ay + py, .color = color});
@@ -819,7 +791,8 @@ void HexanautScene::drawSpyDish(Canvas& canvas, Vec2 worldCenter, int phase) con
 
     const ScreenPos c = toScreen(worldCenter, cfg::kPrismLift + 13.0F + bob);
     // Red drum base with a light top rim.
-    canvas.fillRoundedRect(c.x - (r * 0.58F), c.y, r * 1.16F, r * 0.92F, r * 0.22F, rgb(206, 58, 58));
+    canvas.fillRoundedRect(c.x - (r * 0.58F), c.y, r * 1.16F, r * 0.92F, r * 0.22F,
+                           rgb(206, 58, 58));
     canvas.fillRoundedRect(c.x - (r * 0.6F), c.y - (r * 0.16F), r * 1.2F, r * 0.32F, r * 0.16F,
                            rgb(236, 238, 244));
     // Short pole up to the dish.
@@ -841,10 +814,10 @@ void HexanautScene::drawSpyDish(Canvas& canvas, Vec2 worldCenter, int phase) con
         const float ex = std::cos(a) * erx;
         const float ey = std::sin(a) * ery;
         const float ty = std::clamp(((ey / ery) * 0.5F) + 0.5F, 0.0F, 1.0F);
-        dish.at(static_cast<std::size_t>(k)) = {.x = dcx + ((ex * cosR) - (ey * sinR)),
-                                                .y = dcy + ((ex * sinR) + (ey * cosR)),
-                                                .color = pal::mix(rgb(126, 156, 244),
-                                                                  rgb(44, 68, 168), ty)};
+        dish.at(static_cast<std::size_t>(k)) = {
+            .x = dcx + ((ex * cosR) - (ey * sinR)),
+            .y = dcy + ((ex * sinR) + (ey * cosR)),
+            .color = pal::mix(rgb(126, 156, 244), rgb(44, 68, 168), ty)};
     }
     canvas.fillConvexPolygon(dish);
     canvas.fillCircle(dcx, dcy, r * 0.17F, rgb(34, 52, 128)); // concave hub
@@ -925,7 +898,7 @@ void HexanautScene::drawAvatars(Canvas& canvas) const {
 }
 
 void HexanautScene::drawHud(Canvas& canvas) const {
-    drawBackButton(canvas);
+    backButton_.render(canvas);
 
     // Your rank among all players (1 = most territory) drives the crown badge.
     const float myPct = world_.playerPercent();
@@ -1102,7 +1075,8 @@ void HexanautScene::drawMinimapItems(Canvas& canvas, float boxX, float boxY, flo
         const float huby = iy + (kIcon * 0.22F);
         canvas.fillCircle(hubx, huby, kIcon * 0.5F, rgb(96, 126, 232));
         canvas.fillCircle(hubx, huby, kIcon * 0.22F, rgb(40, 58, 140));
-        canvas.line(hubx, huby, ix + (kIcon * 0.55F), iy - (kIcon * 0.5F), 1.4F, rgb(224, 228, 238));
+        canvas.line(hubx, huby, ix + (kIcon * 0.55F), iy - (kIcon * 0.5F), 1.4F,
+                    rgb(224, 228, 238));
     }
 }
 
@@ -1164,21 +1138,12 @@ void HexanautScene::drawMinimap(Canvas& canvas) {
     }
 }
 
-void HexanautScene::drawBackButton(Canvas& canvas) {
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
-}
-
 void HexanautScene::drawOverlay(Canvas& canvas) const {
-    canvas.fillRect(0.0F, 0.0F, layout::kWidthF, layout::kHeightF, colors::overlay);
-    canvas.textCentered("GAME OVER", layout::kWidthF / 2.0F, 520.0F, 88.0F, colors::white);
+    overlay_.render(canvas, "GAME OVER", 520.0F, 88.0F);
     canvas.textCentered("TERRITORY  " + formatPercent(finalPercent_), layout::kWidthF / 2.0F,
                         632.0F, 40.0F, colors::white);
     canvas.textCentered("BEST  " + formatPercent(bestPercent_), layout::kWidthF / 2.0F, 692.0F,
                         32.0F, colors::botCyan);
-    homeButton_.render(canvas);
-    retryButton_.render(canvas);
 }
 
 void HexanautScene::render(Canvas& canvas) {

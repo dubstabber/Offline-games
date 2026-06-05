@@ -1,6 +1,8 @@
 #include "games/tapmatch/TapMatchScene.hpp"
 
 #include "core/Canvas.hpp"
+#include "core/Easing.hpp"
+#include "core/GridLayout.hpp"
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
@@ -51,13 +53,8 @@ constexpr float kSlotGap = 10.0F;
 constexpr float kSlotH = 90.0F;
 constexpr float kHolderEmoji = 58.0F;
 
-// ---- Game-over overlay buttons — same layout as Tic-Tac-Toe ----------------
+// ---- Game-over overlay row position ----------------------------------------
 constexpr float kButtonRowY = 760.0F;
-constexpr float kHomeSize = 140.0F;
-constexpr float kPlayAgainW = 360.0F;
-constexpr float kButtonGap = 24.0F;
-constexpr float kRowWidth = kHomeSize + kButtonGap + kPlayAgainW;
-constexpr float kRowX = (layout::kWidthF - kRowWidth) / 2.0F;
 
 // ---- Animation tuning (reimplements the original's feel) -------------------
 // Fly-to-holder time grows with travel distance (like the original's linear,
@@ -90,28 +87,14 @@ constexpr float kHolderRowCy = kHolderY + (kHolderH / 2.0F);
            (kSlotW / 2.0F);
 }
 
-[[nodiscard]] float clampUnit(float v) {
-    return std::clamp(v, 0.0F, 1.0F);
-}
-[[nodiscard]] float lerp(float a, float b, float t) {
-    return a + ((b - a) * t);
-}
-[[nodiscard]] float easeOutCubic(float t) {
-    const float u = 1.0F - t;
-    return 1.0F - (u * u * u);
-}
-[[nodiscard]] float easeInCubic(float t) {
-    return t * t * t;
-}
-[[nodiscard]] float easeOutQuad(float t) {
-    return 1.0F - ((1.0F - t) * (1.0F - t));
-}
-[[nodiscard]] float easeOutBack(float t) {
-    constexpr float c1 = 1.70158F;
-    constexpr float c3 = c1 + 1.0F;
-    const float u = t - 1.0F;
-    return 1.0F + (c3 * u * u * u) + (c1 * u * u);
-}
+// Easing/tween helpers live in core/Easing.hpp; pull them in unqualified so the
+// animation call sites below read exactly as they did before.
+using ease::clampUnit;
+using ease::easeInCubic;
+using ease::easeOutBack;
+using ease::easeOutCubic;
+using ease::easeOutQuad;
+using ease::lerp;
 
 [[nodiscard]] float flyDuration(float x0, float y0, float x1, float y1) {
     const float dx = x1 - x0;
@@ -203,34 +186,13 @@ int tapMatchSavedLevel(Difficulty difficulty) {
 TapMatchScene::TapMatchScene(SceneManager& manager, Difficulty difficulty, int level)
     : manager_(manager), difficulty_(difficulty), level_(level),
       board_(boardFor(difficulty, level)),
-      homeButton_("\xF0\x9F\x8F\xA0", kRowX, kButtonRowY, kHomeSize, kHomeSize), // 🏠
-      playAgainButton_("PLAY AGAIN", kRowX + kHomeSize + kButtonGap, kButtonRowY, kPlayAgainW,
-                       kHomeSize) {
-    homeButton_.setColors(colors::white, colors::panelBrown);
-    homeButton_.setOnTap([this] { manager_.popToRoot(); });
+      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      overlay_(colors::menuPink, colors::white, kButtonRowY) {
+    backButton_.setOnTap([this] { manager_.pop(); });
+    overlay_.setOnHome([this] { manager_.popToRoot(); });
     // The action button's label/handler are set per result in enterGameOver().
-    playAgainButton_.setColors(colors::menuPink, colors::white);
     layoutBoard();
     resetFx();
-}
-
-bool TapMatchScene::handleBackButton(const PointerEvent& event) {
-    if (event.phase == PointerEvent::Phase::Move) {
-        return false;
-    }
-    const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
-                                kBackRadius * 2.0F, kBackRadius * 2.0F);
-    if (event.phase == PointerEvent::Phase::Down) {
-        backPressed_ = inside;
-        return inside;
-    }
-    const bool wasPressed = backPressed_;
-    backPressed_ = false;
-    if (wasPressed && inside) {
-        manager_.pop();
-        return true;
-    }
-    return false;
 }
 
 int TapMatchScene::pickAccessibleAt(float px, float py) const {
@@ -253,14 +215,11 @@ int TapMatchScene::pickAccessibleAt(float px, float py) const {
 }
 
 void TapMatchScene::handleInput(const PointerEvent& event) {
-    if (handleBackButton(event)) {
+    if (backButton_.handleInput(event)) {
         return;
     }
     if (phase_ == Phase::GameOver) {
-        if (homeButton_.handleInput(event)) {
-            return;
-        }
-        playAgainButton_.handleInput(event);
+        overlay_.handleInput(event);
         return;
     }
     if (introActive() || event.phase != PointerEvent::Phase::Down) {
@@ -290,22 +249,22 @@ void TapMatchScene::enterGameOver() {
     const bool won = board_.result() == TapMatchBoard::Result::Won;
     const int lastLevel = tapMatchTierSize(difficultyTier(difficulty_));
     if (won && level_ < lastLevel) {
-        playAgainButton_.setLabel("NEXT");
-        playAgainButton_.setOnTap([this] {
+        overlay_.setActionLabel("NEXT");
+        overlay_.setOnAction([this] {
             manager_.replace(std::make_unique<TapMatchScene>(manager_, difficulty_, level_ + 1));
         });
     } else {
-        playAgainButton_.setLabel(won ? "REPLAY" : "RETRY");
-        playAgainButton_.setOnTap([this] { beginRound(); });
+        overlay_.setActionLabel(won ? "REPLAY" : "RETRY");
+        overlay_.setOnAction([this] { beginRound(); });
     }
 }
 
 void TapMatchScene::layoutBoard() {
-    const auto gw = static_cast<float>(std::max(1, board_.gridWidth()));
-    const auto gh = static_cast<float>(std::max(1, board_.gridHeight()));
-    boardCellPx_ = std::min({kBoardAreaW / gw, kBoardAreaH / gh, kMaxCellPx});
-    boardOriginX_ = kBoardAreaX + ((kBoardAreaW - (gw * boardCellPx_)) / 2.0F);
-    boardOriginY_ = kBoardAreaTop + ((kBoardAreaH - (gh * boardCellPx_)) / 2.0F);
+    const grid::Fit fit = grid::fitCentered(kBoardAreaX, kBoardAreaTop, kBoardAreaW, kBoardAreaH,
+                                            board_.gridWidth(), board_.gridHeight(), kMaxCellPx);
+    boardCellPx_ = fit.cellPx;
+    boardOriginX_ = fit.originX;
+    boardOriginY_ = fit.originY;
 }
 
 void TapMatchScene::resetFx() {
@@ -531,14 +490,8 @@ const char* TapMatchScene::resultText() const {
     return board_.result() == TapMatchBoard::Result::Won ? "YOU WIN!" : "STACK FULL!";
 }
 
-void TapMatchScene::drawBackButton(Canvas& canvas) {
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
-}
-
 void TapMatchScene::drawTopBar(Canvas& canvas) const {
-    drawBackButton(canvas);
+    backButton_.render(canvas);
     canvas.textCentered("Level " + std::to_string(level_), layout::kWidthF / 2.0F, 92.0F, 52.0F,
                         theme().primaryText);
     canvas.textCentered(statusText(), layout::kWidthF / 2.0F, 150.0F, 28.0F, theme().tmStatusText);
@@ -637,10 +590,7 @@ void TapMatchScene::drawSparks(Canvas& canvas) const {
 }
 
 void TapMatchScene::drawOverlay(Canvas& canvas) const {
-    canvas.fillRect(0.0F, 0.0F, layout::kWidthF, layout::kHeightF, colors::overlay);
-    canvas.textCentered(resultText(), layout::kWidthF / 2.0F, 560.0F, 92.0F, colors::white);
-    homeButton_.render(canvas);
-    playAgainButton_.render(canvas);
+    overlay_.render(canvas, resultText(), 560.0F, 92.0F);
 }
 
 void TapMatchScene::render(Canvas& canvas) {

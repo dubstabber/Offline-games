@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <numbers>
 #include <span>
@@ -18,34 +19,59 @@ void setDrawColor(SDL_Renderer* renderer, Color c) {
     SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
 }
 
+// The unit-circle ring positions and the triangle-fan index list are the same
+// for every disc, so compute them once. fillDisc then only scales+translates the
+// ring into a stack buffer — no per-call heap allocation and no per-call trig,
+// which is what made circles (every rounded-rect corner, every dot) costly on
+// the PinePhone. The values are identical to the previous per-call computation.
+struct DiscTables {
+    std::array<SDL_FPoint, kCircleSegments + 1> ring{}; // cos/sin at i = 0..kCircleSegments
+    std::array<int, static_cast<std::size_t>(kCircleSegments) * 3> indices{};
+};
+
+const DiscTables& discTables() {
+    static const DiscTables tables = [] {
+        DiscTables t;
+        for (int i = 0; i <= kCircleSegments; ++i) {
+            const float a =
+                (static_cast<float>(i) / kCircleSegments) * 2.0F * std::numbers::pi_v<float>;
+            t.ring.at(static_cast<std::size_t>(i)) = SDL_FPoint{.x = std::cos(a), .y = std::sin(a)};
+        }
+        std::size_t n = 0;
+        for (int i = 1; i <= kCircleSegments; ++i) {
+            t.indices.at(n++) = 0;
+            t.indices.at(n++) = i;
+            t.indices.at(n++) = i + 1;
+        }
+        return t;
+    }();
+    return tables;
+}
+
 // Fan of triangles approximating a filled disc, drawn via SDL_RenderGeometry.
 void fillDisc(SDL_Renderer* renderer, float cx, float cy, float radius, Color color) {
     if (radius <= 0.0F) {
         return;
     }
-    const SDL_FColor fc{static_cast<float>(color.r) / 255.0F, static_cast<float>(color.g) / 255.0F,
-                        static_cast<float>(color.b) / 255.0F, static_cast<float>(color.a) / 255.0F};
+    const SDL_FColor fc{.r = static_cast<float>(color.r) / 255.0F,
+                        .g = static_cast<float>(color.g) / 255.0F,
+                        .b = static_cast<float>(color.b) / 255.0F,
+                        .a = static_cast<float>(color.a) / 255.0F};
 
-    std::vector<SDL_Vertex> verts;
-    verts.reserve(kCircleSegments + 2);
-    verts.push_back(SDL_Vertex{SDL_FPoint{cx, cy}, fc, SDL_FPoint{0, 0}});
+    const DiscTables& tables = discTables();
+    std::array<SDL_Vertex, kCircleSegments + 2> verts{};
+    verts.at(0) = SDL_Vertex{.position = SDL_FPoint{.x = cx, .y = cy},
+                             .color = fc,
+                             .tex_coord = SDL_FPoint{.x = 0.0F, .y = 0.0F}};
     for (int i = 0; i <= kCircleSegments; ++i) {
-        const float t =
-            (static_cast<float>(i) / kCircleSegments) * 2.0F * std::numbers::pi_v<float>;
-        verts.push_back(
-            SDL_Vertex{SDL_FPoint{cx + (std::cos(t) * radius), cy + (std::sin(t) * radius)}, fc,
-                       SDL_FPoint{0, 0}});
-    }
-
-    std::vector<int> indices;
-    indices.reserve(static_cast<std::size_t>(kCircleSegments) * 3);
-    for (int i = 1; i <= kCircleSegments; ++i) {
-        indices.push_back(0);
-        indices.push_back(i);
-        indices.push_back(i + 1);
+        const SDL_FPoint& u = tables.ring.at(static_cast<std::size_t>(i));
+        verts.at(static_cast<std::size_t>(i) + 1) =
+            SDL_Vertex{.position = SDL_FPoint{.x = cx + (u.x * radius), .y = cy + (u.y * radius)},
+                       .color = fc,
+                       .tex_coord = SDL_FPoint{.x = 0.0F, .y = 0.0F}};
     }
     SDL_RenderGeometry(renderer, nullptr, verts.data(), static_cast<int>(verts.size()),
-                       indices.data(), static_cast<int>(indices.size()));
+                       tables.indices.data(), static_cast<int>(tables.indices.size()));
 }
 
 } // namespace
@@ -129,29 +155,35 @@ void Canvas::fillConvexPolygon(std::span<const Vertex> corners) {
     if (corners.size() < 3) {
         return;
     }
-    // Triangle fan from corner 0: (0,1,2), (0,2,3), …
-    std::vector<int> indices;
-    indices.reserve((corners.size() - 2) * 3);
+    // Triangle fan from corner 0: (0,1,2), (0,2,3), … built into a reused buffer
+    // so a per-frame polygon (hex prisms, dish ellipses) allocates nothing.
+    polyScratch_.clear();
     for (std::size_t i = 1; i + 1 < corners.size(); ++i) {
-        indices.push_back(0);
-        indices.push_back(static_cast<int>(i));
-        indices.push_back(static_cast<int>(i + 1));
+        polyScratch_.push_back(0);
+        polyScratch_.push_back(static_cast<int>(i));
+        polyScratch_.push_back(static_cast<int>(i + 1));
     }
-    fillMesh(corners, indices);
+    fillMesh(corners, polyScratch_);
 }
 
 const Canvas::CachedText* Canvas::rasterize(std::string_view str, float pixelSize, Color color) {
     // Cache key folds in size and color so identical labels reuse one texture
-    // instead of re-rasterizing every frame.
-    std::string key;
-    key.reserve(str.size() + 16);
-    key += std::to_string(static_cast<int>(std::lround(pixelSize)));
-    key += ':';
-    key += std::to_string((color.r << 16) | (color.g << 8) | color.b);
-    key += ':';
-    key.append(str);
+    // instead of re-rasterizing every frame. The key is built into a reused
+    // scratch buffer via std::to_chars, so the common case — a cache hit on a
+    // HUD label drawn every frame — performs no heap allocation at all.
+    keyScratch_.clear();
+    std::array<char, 16> num{};
+    const auto appendInt = [&](int value) {
+        const auto result = std::to_chars(num.data(), num.data() + num.size(), value);
+        keyScratch_.append(num.data(), result.ptr);
+    };
+    appendInt(static_cast<int>(std::lround(pixelSize)));
+    keyScratch_ += ':';
+    appendInt((color.r << 16) | (color.g << 8) | color.b);
+    keyScratch_ += ':';
+    keyScratch_.append(str);
 
-    if (auto it = textCache_.find(key); it != textCache_.end()) {
+    if (auto it = textCache_.find(keyScratch_); it != textCache_.end()) {
         return &it->second;
     }
 
@@ -172,7 +204,8 @@ const Canvas::CachedText* Canvas::rasterize(std::string_view str, float pixelSiz
     entry.w = static_cast<float>(surface->w);
     entry.h = static_cast<float>(surface->h);
     entry.texture = std::move(texture);
-    auto [it, _] = textCache_.emplace(std::move(key), std::move(entry));
+    // Copy the key into the map (keyScratch_ is reused next call, so can't move).
+    auto [it, _] = textCache_.emplace(keyScratch_, std::move(entry));
     return &it->second;
 }
 
@@ -196,8 +229,20 @@ void Canvas::text(std::string_view str, float x, float y, float pixelSize, Color
 }
 
 void Canvas::textCentered(std::string_view str, float cx, float cy, float pixelSize, Color color) {
-    const Size size = measure(str, pixelSize);
-    text(str, cx, cy - (size.h / 2.0F), pixelSize, color, Align::Center);
+    if (str.empty()) {
+        return;
+    }
+    // Rasterize once (at the real color) and place it centered on (cx, cy). The
+    // old path called measure() then text(), building the cache key twice and
+    // caching an extra colors::text-tinted copy; glyph metrics are
+    // color-independent, so this draws the exact same pixels with half the work.
+    const CachedText* cached = rasterize(str, pixelSize, color);
+    if (cached == nullptr) {
+        return;
+    }
+    const SDL_FRect dst{
+        .x = cx - (cached->w / 2.0F), .y = cy - (cached->h / 2.0F), .w = cached->w, .h = cached->h};
+    SDL_RenderTexture(renderer_, cached->texture.get(), nullptr, &dst);
 }
 
 void Canvas::emojiCentered(std::string_view str, float cx, float cy, float size) {

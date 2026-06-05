@@ -28,6 +28,14 @@ public:
 
     // Draw the scene. The canvas is already cleared to the background color.
     virtual void render(Canvas& canvas) = 0;
+
+    // Whether the scene needs to be redrawn continuously. Games animate (the
+    // default); the static chrome scenes override to false so the App loop can
+    // idle — skipping the draw and present when nothing changed (no input, no
+    // resize, no scene switch) — to save the PinePhone's battery. A scene that is
+    // only sometimes static (the menu, whose fling scroll settles to rest) may
+    // return a value that varies frame to frame.
+    [[nodiscard]] virtual bool isAnimating() const { return true; }
 };
 
 } // namespace og

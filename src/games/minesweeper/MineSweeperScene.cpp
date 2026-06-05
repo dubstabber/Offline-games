@@ -2,6 +2,7 @@
 
 #include "core/Canvas.hpp"
 #include "core/Color.hpp"
+#include "core/GridLayout.hpp"
 #include "core/Input.hpp"
 #include "core/Layout.hpp"
 #include "core/SceneManager.hpp"
@@ -57,16 +58,10 @@ constexpr float kDigX = kToggleX + kTogglePad;
 constexpr float kFlagX = kDigX + kToggleSquare + kToggleGap;
 constexpr float kSquareY = kBarCy - (kToggleSquare / 2.0F);
 
-// ---- Game-over overlay buttons — same layout as the other games ------------
+// ---- Game-over overlay row position ----------------------------------------
 constexpr float kButtonRowY = 820.0F;
-constexpr float kHomeSize = 140.0F;
-constexpr float kPlayAgainW = 360.0F;
-constexpr float kButtonGap = 24.0F;
-constexpr float kRowWidth = kHomeSize + kButtonGap + kPlayAgainW;
-constexpr float kRowX = (layout::kWidthF - kRowWidth) / 2.0F;
 
 // Emoji glyphs (UTF-8 bytes, matching the project's escaped-literal convention).
-constexpr const char* kHome = "\xF0\x9F\x8F\xA0";           // 🏠
 constexpr const char* kFlag = "\xF0\x9F\x9A\xA9";           // 🚩
 constexpr const char* kBomb = "\xF0\x9F\x92\xA3";           // 💣
 constexpr const char* kShovel = "\xE2\x9B\x8F\xEF\xB8\x8F"; // ⛏️ (dig)
@@ -132,76 +127,33 @@ struct DiffConfig {
 
 MineSweeperScene::MineSweeperScene(SceneManager& manager, Difficulty difficulty)
     : manager_(manager), difficulty_(difficulty), board_(boardFor(difficulty)),
+      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      resetButton_(IconButton::Icon::Glyph, kResetCx, kResetCy, kResetRadius),
       currentStreak_(currentStreakField(settings(), difficulty)),
       bestStreak_(bestStreakField(settings(), difficulty)),
-      homeButton_(kHome, kRowX, kButtonRowY, kHomeSize, kHomeSize),
-      playAgainButton_("PLAY AGAIN", kRowX + kHomeSize + kButtonGap, kButtonRowY, kPlayAgainW,
-                       kHomeSize) {
-    homeButton_.setColors(colors::white, colors::panelBrown);
-    homeButton_.setOnTap([this] { manager_.popToRoot(); });
-    playAgainButton_.setColors(color(difficulty_), colors::white);
-    playAgainButton_.setOnTap([this] { beginRound(); });
+      overlay_(color(difficulty_), colors::white, kButtonRowY) {
+    backButton_.setOnTap([this] { manager_.pop(); });
+    resetButton_.setGlyph(kReset, 54.0F);
+    resetButton_.setOnTap([this] { beginRound(); });
+    overlay_.setOnHome([this] { manager_.popToRoot(); });
+    overlay_.setOnAction([this] { beginRound(); });
     layoutBoard();
 }
 
 void MineSweeperScene::layoutBoard() {
-    const auto gw = static_cast<float>(board_.width());
-    const auto gh = static_cast<float>(board_.height());
-    cellPx_ = std::min({kAreaW / gw, kAreaH / gh, kMaxCellPx});
-    originX_ = kAreaX + ((kAreaW - (gw * cellPx_)) / 2.0F);
-    originY_ = kAreaTop + ((kAreaH - (gh * cellPx_)) / 2.0F);
+    const grid::Fit fit = grid::fitCentered(kAreaX, kAreaTop, kAreaW, kAreaH, board_.width(),
+                                            board_.height(), kMaxCellPx);
+    cellPx_ = fit.cellPx;
+    originX_ = fit.originX;
+    originY_ = fit.originY;
 }
 
 bool MineSweeperScene::cellAt(float px, float py, int& row, int& col) const {
-    if (px < originX_ || py < originY_) {
+    const grid::Fit fit{.cellPx = cellPx_, .originX = originX_, .originY = originY_};
+    if (!grid::cellAt(fit, px, py, col, row)) {
         return false;
     }
-    const int c = static_cast<int>((px - originX_) / cellPx_);
-    const int r = static_cast<int>((py - originY_) / cellPx_);
-    if (r < 0 || r >= board_.height() || c < 0 || c >= board_.width()) {
-        return false;
-    }
-    row = r;
-    col = c;
-    return true;
-}
-
-bool MineSweeperScene::handleBackButton(const PointerEvent& event) {
-    if (event.phase == PointerEvent::Phase::Move) {
-        return false;
-    }
-    const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
-                                kBackRadius * 2.0F, kBackRadius * 2.0F);
-    if (event.phase == PointerEvent::Phase::Down) {
-        backPressed_ = inside;
-        return inside;
-    }
-    const bool wasPressed = backPressed_;
-    backPressed_ = false;
-    if (wasPressed && inside) {
-        manager_.pop();
-        return true;
-    }
-    return false;
-}
-
-bool MineSweeperScene::handleResetButton(const PointerEvent& event) {
-    if (event.phase == PointerEvent::Phase::Move) {
-        return false;
-    }
-    const bool inside = hitTest(event, kResetCx - kResetRadius, kResetCy - kResetRadius,
-                                kResetRadius * 2.0F, kResetRadius * 2.0F);
-    if (event.phase == PointerEvent::Phase::Down) {
-        resetPressed_ = inside;
-        return inside;
-    }
-    const bool wasPressed = resetPressed_;
-    resetPressed_ = false;
-    if (wasPressed && inside) {
-        beginRound();
-        return true;
-    }
-    return false;
+    return row >= 0 && row < board_.height() && col >= 0 && col < board_.width();
 }
 
 bool MineSweeperScene::handleModeToggle(const PointerEvent& event) {
@@ -241,17 +193,14 @@ void MineSweeperScene::handleBoardTap(const PointerEvent& event) {
 }
 
 void MineSweeperScene::handleInput(const PointerEvent& event) {
-    if (handleBackButton(event)) {
+    if (backButton_.handleInput(event)) {
         return;
     }
     if (phase_ == Phase::GameOver) {
-        if (homeButton_.handleInput(event)) {
-            return;
-        }
-        playAgainButton_.handleInput(event);
+        overlay_.handleInput(event);
         return;
     }
-    if (handleResetButton(event)) {
+    if (resetButton_.handleInput(event)) {
         return;
     }
     if (handleModeToggle(event)) {
@@ -278,10 +227,10 @@ void MineSweeperScene::enterGameOver() {
     if (board_.state() == MineSweeperBoard::State::Won) {
         ++currentStreak_;
         bestStreak_ = std::max(bestStreak_, currentStreak_);
-        playAgainButton_.setLabel("PLAY AGAIN");
+        overlay_.setActionLabel("PLAY AGAIN");
     } else {
         currentStreak_ = 0;
-        playAgainButton_.setLabel("RETRY");
+        overlay_.setActionLabel("RETRY");
     }
     Settings& s = settings();
     currentStreakField(s, difficulty_) = currentStreak_;
@@ -294,20 +243,9 @@ const char* MineSweeperScene::resultText() const {
     return board_.state() == MineSweeperBoard::State::Won ? "YOU WIN!" : "BOOM!";
 }
 
-void MineSweeperScene::drawBackButton(Canvas& canvas) {
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
-}
-
-void MineSweeperScene::drawResetButton(Canvas& canvas) {
-    canvas.fillCircle(kResetCx, kResetCy, kResetRadius, theme().backCircle);
-    canvas.emojiCentered(kReset, kResetCx, kResetCy, 54.0F);
-}
-
 void MineSweeperScene::drawTopBar(Canvas& canvas) const {
-    drawBackButton(canvas);
-    drawResetButton(canvas);
+    backButton_.render(canvas);
+    resetButton_.render(canvas);
 
     constexpr Color kPanelLabel = rgb(176, 182, 196);
     // CURRENT STREAK.
@@ -391,10 +329,7 @@ void MineSweeperScene::drawBottomBar(Canvas& canvas) const {
 }
 
 void MineSweeperScene::drawOverlay(Canvas& canvas) const {
-    canvas.fillRect(0.0F, 0.0F, layout::kWidthF, layout::kHeightF, colors::overlay);
-    canvas.textCentered(resultText(), layout::kWidthF / 2.0F, 600.0F, 96.0F, colors::white);
-    homeButton_.render(canvas);
-    playAgainButton_.render(canvas);
+    overlay_.render(canvas, resultText(), 600.0F, 96.0F);
 }
 
 void MineSweeperScene::render(Canvas& canvas) {

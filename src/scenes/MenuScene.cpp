@@ -202,6 +202,13 @@ void MenuScene::update(float dtSeconds) {
     }
 }
 
+bool MenuScene::isAnimating() const {
+    // Static at rest; only an active drag or the post-release fling glide needs
+    // continuous redraws. dragAccumY_ catches the release frame that still
+    // carries the last drag movement before update() folds it into velocity.
+    return gestureActive_ || velocityY_ != 0.0F || dragAccumY_ != 0.0F;
+}
+
 void MenuScene::render(Canvas& canvas) {
     canvas.clear(theme().menuBg);
 

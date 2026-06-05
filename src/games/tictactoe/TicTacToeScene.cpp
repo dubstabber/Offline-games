@@ -33,13 +33,8 @@ constexpr float kCell = kGridSize / 3.0F;
 constexpr float kGridThickness = 16.0F;
 constexpr float kGridOvershoot = 30.0F; // lines extend past the intersections
 
-// ---- Game-over overlay buttons ------------------------------------------
+// ---- Game-over overlay row position -------------------------------------
 constexpr float kButtonRowY = 760.0F;
-constexpr float kHomeSize = 140.0F;
-constexpr float kPlayAgainW = 360.0F;
-constexpr float kButtonGap = 24.0F;
-constexpr float kRowWidth = kHomeSize + kButtonGap + kPlayAgainW;
-constexpr float kRowX = (layout::kWidthF - kRowWidth) / 2.0F;
 
 constexpr float kBotThinkSeconds = 0.45F;
 
@@ -47,43 +42,20 @@ constexpr float kBotThinkSeconds = 0.45F;
 
 TicTacToeScene::TicTacToeScene(SceneManager& manager, Difficulty difficulty)
     : manager_(manager), bot_(std::random_device{}()), difficulty_(difficulty),
-      homeButton_("\xF0\x9F\x8F\xA0", kRowX, kButtonRowY, kHomeSize, kHomeSize), // 🏠
-      playAgainButton_("PLAY AGAIN", kRowX + kHomeSize + kButtonGap, kButtonRowY, kPlayAgainW,
-                       kHomeSize) {
-    homeButton_.setColors(colors::white, colors::panelBrown);
-    homeButton_.setOnTap([this] { manager_.popToRoot(); });
-    playAgainButton_.setColors(colors::youRed, colors::white);
-    playAgainButton_.setOnTap([this] { beginRound(); });
-}
-
-bool TicTacToeScene::handleBackButton(const PointerEvent& event) {
-    if (event.phase == PointerEvent::Phase::Move) {
-        return false;
-    }
-    const bool inside = hitTest(event, kBackCx - kBackRadius, kBackCy - kBackRadius,
-                                kBackRadius * 2.0F, kBackRadius * 2.0F);
-    if (event.phase == PointerEvent::Phase::Down) {
-        backPressed_ = inside;
-        return inside;
-    }
-    const bool wasPressed = backPressed_;
-    backPressed_ = false;
-    if (wasPressed && inside) {
-        manager_.pop();
-        return true;
-    }
-    return false;
+      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      overlay_(colors::youRed, colors::white, kButtonRowY) {
+    backButton_.setOnTap([this] { manager_.pop(); });
+    overlay_.setOnHome([this] { manager_.popToRoot(); });
+    overlay_.setActionLabel("PLAY AGAIN");
+    overlay_.setOnAction([this] { beginRound(); });
 }
 
 void TicTacToeScene::handleInput(const PointerEvent& event) {
-    if (handleBackButton(event)) {
+    if (backButton_.handleInput(event)) {
         return;
     }
     if (phase_ == Phase::GameOver) {
-        if (homeButton_.handleInput(event)) {
-            return;
-        }
-        playAgainButton_.handleInput(event);
+        overlay_.handleInput(event);
         return;
     }
     // While the bot is "thinking" the board is locked.
@@ -146,13 +118,6 @@ std::string TicTacToeScene::resultText() const {
         return *winner == Cell::X ? "YOU WIN!" : "YOU LOST!";
     }
     return "DRAW!";
-}
-
-void TicTacToeScene::drawBackButton(Canvas& canvas) {
-    canvas.fillCircle(kBackCx, kBackCy, kBackRadius, theme().backCircle);
-    // A `<` chevron from two lines.
-    canvas.line(kBackCx + 12.0F, kBackCy - 24.0F, kBackCx - 14.0F, kBackCy, 14.0F, theme().chevron);
-    canvas.line(kBackCx - 14.0F, kBackCy, kBackCx + 12.0F, kBackCy + 24.0F, 14.0F, theme().chevron);
 }
 
 void TicTacToeScene::drawScoreboard(Canvas& canvas) const {
@@ -219,15 +184,12 @@ void TicTacToeScene::drawMarks(Canvas& canvas) const {
 }
 
 void TicTacToeScene::drawOverlay(Canvas& canvas) const {
-    canvas.fillRect(0.0F, 0.0F, layout::kWidthF, layout::kHeightF, colors::overlay);
-    canvas.textCentered(resultText(), layout::kWidthF / 2.0F, 560.0F, 96.0F, colors::white);
-    homeButton_.render(canvas);
-    playAgainButton_.render(canvas);
+    overlay_.render(canvas, resultText(), 560.0F, 96.0F);
 }
 
 void TicTacToeScene::render(Canvas& canvas) {
     canvas.clear(theme().tttBg);
-    drawBackButton(canvas);
+    backButton_.render(canvas);
     drawScoreboard(canvas);
     drawGrid(canvas);
     drawMarks(canvas);

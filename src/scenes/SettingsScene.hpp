@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Scene.hpp"
+#include "ui/IconButton.hpp"
 #include "ui/Slider.hpp"
 #include "ui/Toggle.hpp"
 
@@ -21,17 +22,17 @@ public:
     void handleInput(const PointerEvent& event) override;
     void update(float dtSeconds) override;
     void render(Canvas& canvas) override;
+    // Static screen: only redraws on input, so the App loop idles otherwise.
+    [[nodiscard]] bool isAnimating() const override { return false; }
 
 private:
-    bool handleBackButton(const PointerEvent& event);
-
     SceneManager& manager_;
     Toggle darkToggle_;
     Slider fpsSlider_;
     Slider volumeSlider_;
     Toggle musicToggle_;
     Toggle vibrationToggle_;
-    bool backPressed_ = false;
+    IconButton backButton_;
     bool dirty_ = false; // a control changed since the last save
 };
 

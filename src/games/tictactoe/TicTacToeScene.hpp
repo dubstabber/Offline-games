@@ -4,7 +4,8 @@
 #include "games/Difficulty.hpp"
 #include "games/tictactoe/TicTacToeBoard.hpp"
 #include "games/tictactoe/TicTacToeBot.hpp"
-#include "ui/Button.hpp"
+#include "ui/IconButton.hpp"
+#include "ui/ResultOverlay.hpp"
 
 #include <cstdint>
 #include <string>
@@ -30,12 +31,10 @@ private:
     // GameOver: the result overlay is shown and only its buttons respond.
     enum class Phase : std::uint8_t { PlayerTurn, BotThinking, GameOver };
 
-    bool handleBackButton(const PointerEvent& event);
     void beginRound();
     void enterGameOver();
     [[nodiscard]] std::string resultText() const;
 
-    static void drawBackButton(Canvas& canvas);
     void drawScoreboard(Canvas& canvas) const;
     static void drawGrid(Canvas& canvas);
     void drawMarks(Canvas& canvas) const;
@@ -49,9 +48,8 @@ private:
     float botTimer_ = 0.0F;
     int youScore_ = 0;
     int botScore_ = 0;
-    bool backPressed_ = false;
-    Button homeButton_;
-    Button playAgainButton_;
+    IconButton backButton_;
+    ResultOverlay overlay_;
 };
 
 } // namespace og

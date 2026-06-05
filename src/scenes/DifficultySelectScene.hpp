@@ -4,6 +4,7 @@
 #include "games/Difficulty.hpp"
 #include "games/GameInfo.hpp"
 #include "ui/Button.hpp"
+#include "ui/IconButton.hpp"
 
 #include <string>
 #include <vector>
@@ -23,9 +24,10 @@ public:
     void handleInput(const PointerEvent& event) override;
     void update(float dtSeconds) override;
     void render(Canvas& canvas) override;
+    // Static screen: only redraws on input, so the App loop idles otherwise.
+    [[nodiscard]] bool isAnimating() const override { return false; }
 
 private:
-    bool handleBackButton(const PointerEvent& event);
     bool handleSlider(const PointerEvent& event);
     void dragKnobTo(float x); // move the knob and snap difficulty to the nearest stop
     void setDifficulty(Difficulty difficulty);
@@ -37,7 +39,7 @@ private:
     Difficulty difficulty_ = Difficulty::Medium;
     std::string titleUpper_;
     std::vector<std::string> descLines_; // wrapped lazily on first render
-    bool backPressed_ = false;
+    IconButton backButton_;
     bool draggingKnob_ = false;
     float knobX_ = 0.0F; // live knob centre while dragging; else the difficulty's stop
     Button playButton_;

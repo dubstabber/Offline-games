@@ -64,6 +64,85 @@ void parseBool(std::string_view v, bool& out) {
     }
 }
 
+// Field descriptor tables: the single source of truth for every persisted
+// setting, so serialize(), parse() and the clamp pass iterate one list instead
+// of repeating the ~22 fields three times. maxFps is intentionally absent — it
+// snaps to kFpsStops rather than flooring, so it stays handled by name.
+struct BoolField {
+    const char* key;
+    bool Settings::* member;
+};
+struct FloatField {
+    const char* key;
+    float Settings::* member;
+};
+struct IntField {
+    const char* key;
+    int Settings::* member;
+    int clampMin;
+};
+
+constexpr std::array<BoolField, 3> kBoolFields{{
+    {.key = "darkMode", .member = &Settings::darkMode},
+    {.key = "music", .member = &Settings::music},
+    {.key = "vibration", .member = &Settings::vibration},
+}};
+
+constexpr std::array<FloatField, 1> kFloatFields{{
+    {.key = "volume", .member = &Settings::volume},
+}};
+
+// Order here is also the on-disk serialize order, so it must not change without
+// matching serialize(). clampMin floors each field (levels at 1, scores at 0).
+constexpr std::array<IntField, 19> kIntFields{{
+    {.key = "tapmatchLevelEasy", .member = &Settings::tapmatchLevelEasy, .clampMin = 1},
+    {.key = "tapmatchLevelMedium", .member = &Settings::tapmatchLevelMedium, .clampMin = 1},
+    {.key = "tapmatchLevelHard", .member = &Settings::tapmatchLevelHard, .clampMin = 1},
+    {.key = "blockfillLevelEasy", .member = &Settings::blockfillLevelEasy, .clampMin = 1},
+    {.key = "blockfillLevelMedium", .member = &Settings::blockfillLevelMedium, .clampMin = 1},
+    {.key = "blockfillLevelHard", .member = &Settings::blockfillLevelHard, .clampMin = 1},
+    {.key = "blockfillLevelVeryHard", .member = &Settings::blockfillLevelVeryHard, .clampMin = 1},
+    {.key = "minesweeperStreakEasy", .member = &Settings::minesweeperStreakEasy, .clampMin = 0},
+    {.key = "minesweeperStreakMedium", .member = &Settings::minesweeperStreakMedium, .clampMin = 0},
+    {.key = "minesweeperStreakHard", .member = &Settings::minesweeperStreakHard, .clampMin = 0},
+    {.key = "minesweeperBestEasy", .member = &Settings::minesweeperBestEasy, .clampMin = 0},
+    {.key = "minesweeperBestMedium", .member = &Settings::minesweeperBestMedium, .clampMin = 0},
+    {.key = "minesweeperBestHard", .member = &Settings::minesweeperBestHard, .clampMin = 0},
+    {.key = "snakeBestEasy", .member = &Settings::snakeBestEasy, .clampMin = 0},
+    {.key = "snakeBestMedium", .member = &Settings::snakeBestMedium, .clampMin = 0},
+    {.key = "snakeBestHard", .member = &Settings::snakeBestHard, .clampMin = 0},
+    {.key = "hexanautBestEasy", .member = &Settings::hexanautBestEasy, .clampMin = 0},
+    {.key = "hexanautBestMedium", .member = &Settings::hexanautBestMedium, .clampMin = 0},
+    {.key = "hexanautBestHard", .member = &Settings::hexanautBestHard, .clampMin = 0},
+}};
+
+// Apply one parsed key=value line to the matching field. Unknown keys are
+// ignored so older/newer files stay forward-compatible.
+void applyKv(Settings& settings, std::string_view key, std::string_view value) {
+    if (key == "maxFps") {
+        parseInt(value, settings.maxFps);
+        return;
+    }
+    for (const BoolField& field : kBoolFields) {
+        if (key == field.key) {
+            parseBool(value, settings.*field.member);
+            return;
+        }
+    }
+    for (const FloatField& field : kFloatFields) {
+        if (key == field.key) {
+            parseFloat(value, settings.*field.member);
+            return;
+        }
+    }
+    for (const IntField& field : kIntFields) {
+        if (key == field.key) {
+            parseInt(value, settings.*field.member);
+            return;
+        }
+    }
+}
+
 [[nodiscard]] std::string prefFilePath() {
     char* prefRaw = SDL_GetPrefPath(kPrefOrg, kPrefApp);
     if (prefRaw == nullptr) {
@@ -89,44 +168,13 @@ std::string serialize(const Settings& settings) {
     out += settings.vibration ? "1" : "0";
     out += "\nmaxFps=";
     out += std::to_string(settings.maxFps);
-    out += "\ntapmatchLevelEasy=";
-    out += std::to_string(settings.tapmatchLevelEasy);
-    out += "\ntapmatchLevelMedium=";
-    out += std::to_string(settings.tapmatchLevelMedium);
-    out += "\ntapmatchLevelHard=";
-    out += std::to_string(settings.tapmatchLevelHard);
-    out += "\nblockfillLevelEasy=";
-    out += std::to_string(settings.blockfillLevelEasy);
-    out += "\nblockfillLevelMedium=";
-    out += std::to_string(settings.blockfillLevelMedium);
-    out += "\nblockfillLevelHard=";
-    out += std::to_string(settings.blockfillLevelHard);
-    out += "\nblockfillLevelVeryHard=";
-    out += std::to_string(settings.blockfillLevelVeryHard);
-    out += "\nminesweeperStreakEasy=";
-    out += std::to_string(settings.minesweeperStreakEasy);
-    out += "\nminesweeperStreakMedium=";
-    out += std::to_string(settings.minesweeperStreakMedium);
-    out += "\nminesweeperStreakHard=";
-    out += std::to_string(settings.minesweeperStreakHard);
-    out += "\nminesweeperBestEasy=";
-    out += std::to_string(settings.minesweeperBestEasy);
-    out += "\nminesweeperBestMedium=";
-    out += std::to_string(settings.minesweeperBestMedium);
-    out += "\nminesweeperBestHard=";
-    out += std::to_string(settings.minesweeperBestHard);
-    out += "\nsnakeBestEasy=";
-    out += std::to_string(settings.snakeBestEasy);
-    out += "\nsnakeBestMedium=";
-    out += std::to_string(settings.snakeBestMedium);
-    out += "\nsnakeBestHard=";
-    out += std::to_string(settings.snakeBestHard);
-    out += "\nhexanautBestEasy=";
-    out += std::to_string(settings.hexanautBestEasy);
-    out += "\nhexanautBestMedium=";
-    out += std::to_string(settings.hexanautBestMedium);
-    out += "\nhexanautBestHard=";
-    out += std::to_string(settings.hexanautBestHard);
+    // The per-game ints follow in table order, matching the layout above.
+    for (const IntField& field : kIntFields) {
+        out += '\n';
+        out += field.key;
+        out += '=';
+        out += std::to_string(settings.*field.member);
+    }
     out += "\n";
     return out;
 }
@@ -146,78 +194,13 @@ Settings parse(std::string_view text) {
         }
         const std::string_view key = trim(line.substr(0, eq));
         const std::string_view value = trim(line.substr(eq + 1));
-        if (key == "darkMode") {
-            parseBool(value, settings.darkMode);
-        } else if (key == "volume") {
-            parseFloat(value, settings.volume);
-        } else if (key == "music") {
-            parseBool(value, settings.music);
-        } else if (key == "vibration") {
-            parseBool(value, settings.vibration);
-        } else if (key == "maxFps") {
-            parseInt(value, settings.maxFps);
-        } else if (key == "tapmatchLevelEasy") {
-            parseInt(value, settings.tapmatchLevelEasy);
-        } else if (key == "tapmatchLevelMedium") {
-            parseInt(value, settings.tapmatchLevelMedium);
-        } else if (key == "tapmatchLevelHard") {
-            parseInt(value, settings.tapmatchLevelHard);
-        } else if (key == "blockfillLevelEasy") {
-            parseInt(value, settings.blockfillLevelEasy);
-        } else if (key == "blockfillLevelMedium") {
-            parseInt(value, settings.blockfillLevelMedium);
-        } else if (key == "blockfillLevelHard") {
-            parseInt(value, settings.blockfillLevelHard);
-        } else if (key == "blockfillLevelVeryHard") {
-            parseInt(value, settings.blockfillLevelVeryHard);
-        } else if (key == "minesweeperStreakEasy") {
-            parseInt(value, settings.minesweeperStreakEasy);
-        } else if (key == "minesweeperStreakMedium") {
-            parseInt(value, settings.minesweeperStreakMedium);
-        } else if (key == "minesweeperStreakHard") {
-            parseInt(value, settings.minesweeperStreakHard);
-        } else if (key == "minesweeperBestEasy") {
-            parseInt(value, settings.minesweeperBestEasy);
-        } else if (key == "minesweeperBestMedium") {
-            parseInt(value, settings.minesweeperBestMedium);
-        } else if (key == "minesweeperBestHard") {
-            parseInt(value, settings.minesweeperBestHard);
-        } else if (key == "snakeBestEasy") {
-            parseInt(value, settings.snakeBestEasy);
-        } else if (key == "snakeBestMedium") {
-            parseInt(value, settings.snakeBestMedium);
-        } else if (key == "snakeBestHard") {
-            parseInt(value, settings.snakeBestHard);
-        } else if (key == "hexanautBestEasy") {
-            parseInt(value, settings.hexanautBestEasy);
-        } else if (key == "hexanautBestMedium") {
-            parseInt(value, settings.hexanautBestMedium);
-        } else if (key == "hexanautBestHard") {
-            parseInt(value, settings.hexanautBestHard);
-        }
-        // Unknown keys are ignored so older/newer files stay forward-compatible.
+        applyKv(settings, key, value);
     }
     settings.volume = std::clamp(settings.volume, 0.0F, 1.0F);
     settings.maxFps = snapFps(settings.maxFps);
-    settings.tapmatchLevelEasy = std::max(1, settings.tapmatchLevelEasy);
-    settings.tapmatchLevelMedium = std::max(1, settings.tapmatchLevelMedium);
-    settings.tapmatchLevelHard = std::max(1, settings.tapmatchLevelHard);
-    settings.blockfillLevelEasy = std::max(1, settings.blockfillLevelEasy);
-    settings.blockfillLevelMedium = std::max(1, settings.blockfillLevelMedium);
-    settings.blockfillLevelHard = std::max(1, settings.blockfillLevelHard);
-    settings.blockfillLevelVeryHard = std::max(1, settings.blockfillLevelVeryHard);
-    settings.minesweeperStreakEasy = std::max(0, settings.minesweeperStreakEasy);
-    settings.minesweeperStreakMedium = std::max(0, settings.minesweeperStreakMedium);
-    settings.minesweeperStreakHard = std::max(0, settings.minesweeperStreakHard);
-    settings.minesweeperBestEasy = std::max(0, settings.minesweeperBestEasy);
-    settings.minesweeperBestMedium = std::max(0, settings.minesweeperBestMedium);
-    settings.minesweeperBestHard = std::max(0, settings.minesweeperBestHard);
-    settings.snakeBestEasy = std::max(0, settings.snakeBestEasy);
-    settings.snakeBestMedium = std::max(0, settings.snakeBestMedium);
-    settings.snakeBestHard = std::max(0, settings.snakeBestHard);
-    settings.hexanautBestEasy = std::max(0, settings.hexanautBestEasy);
-    settings.hexanautBestMedium = std::max(0, settings.hexanautBestMedium);
-    settings.hexanautBestHard = std::max(0, settings.hexanautBestHard);
+    for (const IntField& field : kIntFields) {
+        settings.*field.member = std::max(field.clampMin, settings.*field.member);
+    }
     return settings;
 }
 
