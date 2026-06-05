@@ -21,8 +21,12 @@ inline constexpr float kHexSize = 26.0F; // world units, center to corner
 // speed = kHexSpacing / stepInterval, so an avatar crosses one hex in the same
 // time the old discrete stepping did.
 inline constexpr float kHexSpacing = std::numbers::sqrt3_v<float> * kHexSize;
-inline constexpr float kSquash = 0.58F;         // vertical foreshorten for the tilt
-inline constexpr float kPrismLiftFactor = 0.5F; // prism height as a fraction of kHexSize
+inline constexpr float kSquash = 1.0F; // 1.0 = flat top-down (no vertical foreshorten)
+// Tiles still get a shallow extrusion so owned land reads as a raised tile, but
+// with the flat (un-tilted) projection the lift is kept small: a tall pop would
+// look detached, floating above the straight-down ground. Tune in lockstep with
+// kSquash — these two knobs are the whole "how 3D does it look" dial.
+inline constexpr float kPrismLiftFactor = 0.18F; // prism height as a fraction of kHexSize
 inline constexpr float kPrismLift = kHexSize * kPrismLiftFactor;
 inline constexpr float kGroundInset = 0.93F; // flat ground hexes drawn slightly small -> grid gaps
 
