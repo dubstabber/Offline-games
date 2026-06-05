@@ -8,6 +8,7 @@
 #include "ui/Button.hpp"
 
 #include <cstdint>
+#include <random>
 #include <vector>
 
 namespace og {
@@ -53,11 +54,23 @@ private:
     void appendHexTop(hexanaut::Vec2 centerWorld, float inset, float lift, Color colorTop,
                       Color colorBottom);
     void appendWall(hexanaut::Vec2 centerWorld, int edge, float liftTop, Color top, Color bottom);
+    // Extruded territory block (front-facing walls + lit top face) for `owner`.
+    // Shared by owned cells and by cells a rival is cutting a trail across, so the
+    // enemy's block keeps its fill/height under the attacker's outline.
+    void appendOwnedPrism(const hexanaut::HexGrid& grid, hexanaut::HexCoord coord,
+                          hexanaut::Vec2 center, hexanaut::PlayerId owner);
     void appendCellPrism(const hexanaut::HexGrid& grid, hexanaut::HexCoord coord,
                          hexanaut::Vec2 center);
     void drawField(Canvas& canvas);
     void drawTrailOutlines(Canvas& canvas) const;
     void drawTrails(Canvas& canvas);
+    // Spark FX kicked up while an avatar cuts across another player's territory.
+    // Spawn rate is dt-accumulated (spawnCutFx); updateParticles advances + culls;
+    // drawParticles batches the live sparks into one mesh. Pure cosmetics — no
+    // simulation state, so it never touches HexWorld.
+    void spawnCutFx(float dtSeconds);
+    void updateParticles(float dtSeconds);
+    void drawParticles(Canvas& canvas);
     void drawPowerups(Canvas& canvas) const;
     void drawAvatars(Canvas& canvas) const;
     void drawHud(Canvas& canvas) const;
@@ -71,10 +84,27 @@ private:
     };
 
     // An active-trail hex collected during drawField and stroked as a bright
-    // owner-colored outline in drawTrailOutlines (the out-of-territory look).
+    // owner-colored outline in drawTrailOutlines (the out-of-territory look). `lift`
+    // is the surface it sits on: 0 over flat ground, the prism top when the trail
+    // crosses (and is drawn over) another player's raised territory block.
     struct TrailOutline {
         hexanaut::Vec2 center;
         hexanaut::PlayerId owner = 0;
+        float lift = 0.0F;
+    };
+
+    // A single debris spark thrown off while cutting through enemy land. Lives in
+    // world space (pos + a vertical "lift" that arcs up and falls under gravity)
+    // so it projects through the same camera as everything else and fades by age.
+    struct Particle {
+        hexanaut::Vec2 pos;
+        hexanaut::Vec2 vel;
+        float lift = 0.0F;
+        float liftVel = 0.0F;
+        float age = 0.0F;
+        float life = 0.4F;
+        float size = 4.0F;
+        Color color{};
     };
 
     SceneManager& manager_;
@@ -101,6 +131,10 @@ private:
     std::vector<PowerupDraw> powerupDraws_;   // power-up cells found during drawField
     std::vector<TrailOutline> trailOutlines_; // active-trail cells found during drawField
     std::vector<ScreenPos> ropeScratch_;      // reused per-player rope path in drawTrails
+
+    std::vector<Particle> particles_; // live cut-through sparks
+    float fxSpawnAccum_ = 0.0F;       // dt accumulator pacing spark bursts
+    std::mt19937 fxRng_;              // visual-only jitter (fixed seed; not gameplay)
 
     Button homeButton_;
     Button retryButton_;

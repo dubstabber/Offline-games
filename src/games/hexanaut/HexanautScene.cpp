@@ -121,6 +121,25 @@ constexpr Color kPanelInk = rgb(214, 218, 228);    // light text on the dark pan
 constexpr Color kHeaderEdge = rgb(60, 200, 222);   // cyan header outline (matches the reference)
 constexpr const char* kCrown = "\xF0\x9F\x91\x91"; // 👑
 
+// ---- Cut-through spark FX (cosmetic) ----------------------------------------
+namespace fx {
+constexpr float kSpawnInterval = 0.016F; // seconds between spark bursts while cutting
+constexpr int kPerBurst = 3;             // sparks per cutting on-screen player, per burst
+constexpr std::size_t kMaxParticles = 200;
+constexpr float kLifeMin = 0.30F;
+constexpr float kLifeMax = 0.58F;
+constexpr float kSpeedMin = 30.0F; // outward drift, world units/sec
+constexpr float kSpeedMax = 110.0F;
+constexpr float kLiftVelMin = 60.0F; // initial pop upward
+constexpr float kLiftVelMax = 150.0F;
+constexpr float kGravity = 300.0F;  // pulls the lift back toward the ground
+constexpr float kSizeMin = 4.0F;    // square half-extent is size*0.5, in logical px @ zoom 1
+constexpr float kSizeMax = 9.0F;
+constexpr float kSpawnJitter = 14.0F; // scatter around the avatar, world units
+constexpr float kOnScreenMargin = 60.0F;
+constexpr float kFadeExp = 0.6F; // <1 holds the spark bright then drops off late
+} // namespace fx
+
 } // namespace
 
 HexanautScene::HexanautScene(SceneManager& manager, Difficulty difficulty)
@@ -216,10 +235,12 @@ void HexanautScene::update(float dtSeconds) {
             world_.step();
             accum_ -= cfg::kFixedDt;
         }
+        spawnCutFx(dtSeconds);
         if (!world_.playerAlive()) {
             enterGameOver();
         }
     }
+    updateParticles(dtSeconds); // keep advancing/fading even after game over
     updateCamera(dtSeconds);
 }
 
@@ -335,34 +356,47 @@ void HexanautScene::drawField(Canvas& canvas) {
     canvas.fillMesh(meshVerts_, meshIdx_);
 }
 
+void HexanautScene::appendOwnedPrism(const hexanaut::HexGrid& grid, HexCoord coord, Vec2 center,
+                                     hexanaut::PlayerId owner) {
+    // Extruded territory block: front-facing walls only where it borders a cell of a
+    // *different* owner (open ground/neutral counts). Same-owner neighbors stay
+    // flush — including ones a rival is cutting a trail across — so no internal walls
+    // line the cut; the attacker's claim shows as an outline on top instead.
+    const Color base = pal::topColor(owner);
+    const Color wallTop = pal::darken(base, pal::kWallTop);
+    const Color wallBottom = pal::darken(base, pal::kWallBottom);
+    for (int e = 0; e <= 2; ++e) {
+        const HexCoord nb = hexanaut::neighbor(coord, kEdgeToDir.at(static_cast<std::size_t>(e)));
+        if (!grid.contains(nb) || grid.at(nb).owner != owner) {
+            appendWall(center, e, cfg::kPrismLift, wallTop, wallBottom);
+        }
+    }
+    appendHexTop(center, 1.04F, cfg::kPrismLift, pal::shade(base, pal::kFaceTop),
+                 pal::shade(base, pal::kFaceBottom));
+}
+
 void HexanautScene::appendCellPrism(const hexanaut::HexGrid& grid, HexCoord coord, Vec2 center) {
     const Cell& cell = grid.at(coord);
     if (cell.trailOwner != hexanaut::kNoTrail) {
-        // Active (out-of-territory) trail: not an extruded prism. The cell stays at
-        // ground level, faintly tinted toward the owner's color, and gets a bright
-        // hex outline stroked on top (see drawTrailOutlines) — the claimed-but-not-
-        // captured look from the reference art. Closing the loop turns these into
-        // real (extruded) territory.
-        const Color owner = pal::topColor(cell.trailOwner);
-        appendHexTop(center, cfg::kGroundInset, 0.0F, pal::mix(pal::kGroundTop, owner, 0.22F),
-                     pal::mix(pal::kGroundBottom, owner, 0.16F));
-        trailOutlines_.push_back({.center = center, .owner = cell.trailOwner});
-    } else if (cell.owner != hexanaut::kNeutral) {
-        // Owned territory: front-facing walls only where it borders a different cell.
-        const Color base = pal::topColor(cell.owner);
-        const Color wallTop = pal::darken(base, pal::kWallTop);
-        const Color wallBottom = pal::darken(base, pal::kWallBottom);
-        for (int e = 0; e <= 2; ++e) {
-            const HexCoord nb =
-                hexanaut::neighbor(coord, kEdgeToDir.at(static_cast<std::size_t>(e)));
-            const bool boundary = !grid.contains(nb) || grid.at(nb).owner != cell.owner ||
-                                  grid.at(nb).trailOwner != hexanaut::kNoTrail;
-            if (boundary) {
-                appendWall(center, e, cfg::kPrismLift, wallTop, wallBottom);
-            }
+        if (cell.owner != hexanaut::kNeutral) {
+            // Cutting across someone else's land: leave their territory block intact
+            // (fill + height) and stroke OUR bright outline on its top face. The enemy
+            // block stays visible with the attacker's pending claim marked over it —
+            // they only lose it once the loop closes (closeTrailAndCapture).
+            appendOwnedPrism(grid, coord, center, cell.owner);
+            trailOutlines_.push_back(
+                {.center = center, .owner = cell.trailOwner, .lift = cfg::kPrismLift});
+        } else {
+            // Out-of-territory trail over open ground: the cell stays at ground level,
+            // faintly tinted toward the owner's color, with a bright hex outline on top
+            // (the claimed-but-not-captured look). Closing the loop extrudes it.
+            const Color owner = pal::topColor(cell.trailOwner);
+            appendHexTop(center, cfg::kGroundInset, 0.0F, pal::mix(pal::kGroundTop, owner, 0.22F),
+                         pal::mix(pal::kGroundBottom, owner, 0.16F));
+            trailOutlines_.push_back({.center = center, .owner = cell.trailOwner, .lift = 0.0F});
         }
-        appendHexTop(center, 1.04F, cfg::kPrismLift, pal::shade(base, pal::kFaceTop),
-                     pal::shade(base, pal::kFaceBottom));
+    } else if (cell.owner != hexanaut::kNeutral) {
+        appendOwnedPrism(grid, coord, center, cell.owner);
     } else {
         appendHexTop(center, cfg::kGroundInset, 0.0F, pal::kGroundTop, pal::kGroundBottom);
     }
@@ -381,7 +415,7 @@ void HexanautScene::drawTrailOutlines(Canvas& canvas) const {
         std::array<ScreenPos, 6> corners{};
         for (int k = 0; k < 6; ++k) {
             corners.at(static_cast<std::size_t>(k)) =
-                toScreen(t.center + cornerOffset(k, cfg::kGroundInset), 0.0F);
+                toScreen(t.center + cornerOffset(k, cfg::kGroundInset), t.lift);
         }
         for (int k = 0; k < 6; ++k) {
             const ScreenPos& a = corners.at(static_cast<std::size_t>(k));
@@ -441,6 +475,92 @@ void HexanautScene::drawTrails(Canvas& canvas) {
         stroke(radius, owner, 0.0F);                    // tube body
         stroke(radius * 0.42F, gloss, -radius * 0.42F); // glossy top highlight
     }
+}
+
+void HexanautScene::spawnCutFx(float dtSeconds) {
+    fxSpawnAccum_ += dtSeconds;
+    if (fxSpawnAccum_ < fx::kSpawnInterval) {
+        return;
+    }
+    const hexanaut::HexGrid& grid = world_.grid();
+    std::uniform_real_distribution<float> u(0.0F, 1.0F);
+    const auto lerpf = [](float a, float b, float t) { return a + ((b - a) * t); };
+    constexpr float kTwoPi = 2.0F * std::numbers::pi_v<float>;
+
+    while (fxSpawnAccum_ >= fx::kSpawnInterval) {
+        fxSpawnAccum_ -= fx::kSpawnInterval;
+        for (const Player& p : world_.players()) {
+            if (!p.alive || !grid.contains(p.cell)) {
+                continue;
+            }
+            // "Cutting" = sitting over a cell still owned by someone else.
+            const Cell& under = grid.at(p.cell);
+            if (under.owner == hexanaut::kNeutral || under.owner == p.id) {
+                continue;
+            }
+            const ScreenPos sp = toScreen(p.pos, 0.0F);
+            if (sp.x < -fx::kOnScreenMargin || sp.x > layout::kWidthF + fx::kOnScreenMargin ||
+                sp.y < -fx::kOnScreenMargin || sp.y > layout::kHeightF + fx::kOnScreenMargin) {
+                continue; // off-screen player: nothing to show, don't burn the pool
+            }
+            const Color spark = pal::lighten(pal::topColor(p.id), 0.85F);
+            for (int k = 0; k < fx::kPerBurst && particles_.size() < fx::kMaxParticles; ++k) {
+                const float a = u(fxRng_) * kTwoPi;
+                const float r = u(fxRng_) * fx::kSpawnJitter;
+                const float va = u(fxRng_) * kTwoPi;
+                const float vspd = lerpf(fx::kSpeedMin, fx::kSpeedMax, u(fxRng_));
+                particles_.push_back(
+                    Particle{.pos = {p.pos.x + (std::cos(a) * r), p.pos.y + (std::sin(a) * r)},
+                             .vel = {std::cos(va) * vspd, std::sin(va) * vspd},
+                             .lift = 0.0F,
+                             .liftVel = lerpf(fx::kLiftVelMin, fx::kLiftVelMax, u(fxRng_)),
+                             .age = 0.0F,
+                             .life = lerpf(fx::kLifeMin, fx::kLifeMax, u(fxRng_)),
+                             .size = lerpf(fx::kSizeMin, fx::kSizeMax, u(fxRng_)),
+                             .color = spark});
+            }
+        }
+    }
+}
+
+void HexanautScene::updateParticles(float dtSeconds) {
+    for (Particle& p : particles_) {
+        p.age += dtSeconds;
+        p.pos = p.pos + (p.vel * dtSeconds);
+        p.liftVel -= fx::kGravity * dtSeconds;
+        p.lift += p.liftVel * dtSeconds;
+        if (p.lift < 0.0F) {
+            p.lift = 0.0F; // settle on the ground and rest there for the rest of its life
+            p.liftVel = 0.0F;
+        }
+    }
+    std::erase_if(particles_, [](const Particle& p) { return p.age >= p.life; });
+}
+
+void HexanautScene::drawParticles(Canvas& canvas) {
+    if (particles_.empty()) {
+        return;
+    }
+    // One mesh for every live spark (the field/minimap buffers are free here).
+    meshVerts_.clear();
+    meshIdx_.clear();
+    for (const Particle& p : particles_) {
+        const float t = std::clamp(p.age / p.life, 0.0F, 1.0F);
+        const float alpha = std::pow(1.0F - t, fx::kFadeExp); // hold bright, drop off late
+        const ScreenPos sp = toScreen(p.pos, p.lift);
+        const float half = p.size * 0.5F * zoom_;
+        Color c = p.color;
+        c.a = static_cast<std::uint8_t>(alpha * 255.0F);
+        const auto base = static_cast<int>(meshVerts_.size());
+        meshVerts_.push_back({.x = sp.x - half, .y = sp.y - half, .color = c});
+        meshVerts_.push_back({.x = sp.x + half, .y = sp.y - half, .color = c});
+        meshVerts_.push_back({.x = sp.x + half, .y = sp.y + half, .color = c});
+        meshVerts_.push_back({.x = sp.x - half, .y = sp.y + half, .color = c});
+        for (const int i : {0, 1, 2, 0, 2, 3}) {
+            meshIdx_.push_back(base + i);
+        }
+    }
+    canvas.fillMesh(meshVerts_, meshIdx_);
 }
 
 void HexanautScene::drawPowerups(Canvas& canvas) const {
@@ -709,6 +829,7 @@ void HexanautScene::render(Canvas& canvas) {
     drawTrails(canvas);
     drawPowerups(canvas);
     drawAvatars(canvas);
+    drawParticles(canvas);
     drawHud(canvas);
     drawLeaderboard(canvas);
     drawMinimap(canvas);
