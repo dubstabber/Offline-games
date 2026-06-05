@@ -63,6 +63,15 @@ struct Shooter {
     std::uint32_t shotCount = 0; // bumped on each capture -> one laser bolt per bump
 };
 
+// A persistent slowing totem. It sits on a fixed `cell`; while that cell is owned
+// by a player it blankets a hex radius (config::kSlowRadius) in snow and slows
+// every OTHER avatar standing in that field — the owner is immune. Owned by
+// whoever owns `cell`, so recapturing the cell steals it. Does nothing while the
+// cell is neutral.
+struct SlowTotem {
+    HexCoord cell{};
+};
+
 class HexWorld {
 public:
     HexWorld(int difficultyIndex, std::uint32_t seed);
@@ -78,6 +87,7 @@ public:
     [[nodiscard]] const Player& player() const { return players_.front(); }
     [[nodiscard]] const std::vector<Player>& players() const { return players_; }
     [[nodiscard]] const std::vector<Shooter>& shooters() const { return shooters_; }
+    [[nodiscard]] const std::vector<SlowTotem>& slowTotems() const { return slowTotems_; }
     [[nodiscard]] const HexGrid& grid() const { return grid_; }
     [[nodiscard]] bool playerAlive() const { return players_.front().alive; }
     [[nodiscard]] int totalCells() const { return totalCells_; }
@@ -118,6 +128,10 @@ public:
         grid_.at(c).powerup = static_cast<std::uint8_t>(PowerUp::Shooter);
         shooters_.push_back(Shooter{.cell = c});
     }
+    void setSlowTotemForTest(HexCoord c) {
+        grid_.at(c).powerup = static_cast<std::uint8_t>(PowerUp::SlowTotem);
+        slowTotems_.push_back(SlowTotem{.cell = c});
+    }
     void advanceShootersForTest(int ticks) {
         for (int i = 0; i < ticks; ++i) {
             updateShooters();
@@ -137,9 +151,16 @@ private:
     void decideBots();
     void decayEffects();
     void maybeSpawnPowerup();
-    // Place all `count` shooter items once at construction: static map prizes that
-    // never move or respawn, shown on the minimap and contested via territory.
+    // Place `count` static items once at construction: map prizes that never move
+    // or respawn, shown on the minimap and contested via territory.
     void generateShooters(int count);
+    void generateSlowTotems(int count);
+    // A random neutral, trail-free, item-free cell to drop a static item on; false
+    // if none found within the attempt budget. Shared by the generators above.
+    [[nodiscard]] bool findFreeItemCell(HexCoord& out);
+    // True if `cell` lies in the slowing field of a totem owned by someone other
+    // than `id` (the owner is immune), so that avatar moves slower this tick.
+    [[nodiscard]] bool inEnemySlowField(PlayerId id, HexCoord cell) const;
     // Advance every shooter one tick: capture the nearest in-range cell for its
     // current owner at a distance-scaled rate, and refresh its firing/target so
     // the Scene can draw the beam. Owner-neutral shooters idle.
@@ -179,6 +200,7 @@ private:
     std::vector<Player> players_;
     std::vector<std::unique_ptr<BotController>> bots_; // parallel to players_; null for the human
     std::vector<Shooter> shooters_;                    // persistent laser items on the board
+    std::vector<SlowTotem> slowTotems_;                // persistent slowing-field items
     std::mt19937 rng_;
     int totalCells_;
     std::vector<std::uint8_t> visited_; // flood-fill scratch, sized to the grid

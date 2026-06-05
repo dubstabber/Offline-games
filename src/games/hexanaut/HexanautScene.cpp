@@ -140,6 +140,19 @@ constexpr float kOnScreenMargin = 60.0F;
 constexpr float kFadeExp = 0.6F; // <1 holds the spark bright then drops off late
 } // namespace fx
 
+// Cosmetic snow tuning.
+namespace snow {
+constexpr int kFlakesPerTotem = 64;
+constexpr float kFallSpeed = 95.0F; // world units/sec
+} // namespace snow
+
+// Cheap deterministic [0,1) hash so each snowflake's position/phase is stable per
+// frame without storing per-flake state (the totems themselves never move).
+[[nodiscard]] float hash01(float n) {
+    const float s = std::sin(n) * 43758.5453F;
+    return s - std::floor(s);
+}
+
 } // namespace
 
 HexanautScene::HexanautScene(SceneManager& manager, Difficulty difficulty)
@@ -407,10 +420,10 @@ void HexanautScene::appendCellPrism(const hexanaut::HexGrid& grid, HexCoord coor
     } else {
         appendHexTop(center, cfg::kGroundInset, 0.0F, pal::kGroundTop, pal::kGroundBottom);
     }
-    // Speed/Vision render as floating bubbles here; the Shooter is drawn separately
-    // (crystal + laser) from the sim's shooter list, so skip it in this pass.
-    if (cell.powerup != 0 &&
-        cell.powerup != static_cast<std::uint8_t>(hexanaut::PowerUp::Shooter)) {
+    // Only Speed/Vision render as floating bubbles here; the Shooter and SlowTotem
+    // are drawn separately (crystal+laser / cloud+snow) from their own sim lists.
+    if (cell.powerup == static_cast<std::uint8_t>(hexanaut::PowerUp::Speed) ||
+        cell.powerup == static_cast<std::uint8_t>(hexanaut::PowerUp::Vision)) {
         powerupDraws_.push_back({.center = center, .type = cell.powerup});
     }
 }
@@ -678,6 +691,124 @@ void HexanautScene::drawShooters(Canvas& canvas) const {
     }
 }
 
+void HexanautScene::appendSnowflake(float sx, float sy, float size, Color color) {
+    constexpr float kThird = std::numbers::pi_v<float> / 3.0F; // 60 degrees between bars
+    for (int b = 0; b < 3; ++b) {
+        const float ang = static_cast<float>(b) * kThird;
+        const float ax = std::cos(ang) * size;             // half-length along the bar
+        const float ay = std::sin(ang) * size;
+        const float px = -std::sin(ang) * (size * 0.26F);  // half-width across it
+        const float py = std::cos(ang) * (size * 0.26F);
+        const auto base = static_cast<int>(meshVerts_.size());
+        meshVerts_.push_back({.x = sx + ax + px, .y = sy + ay + py, .color = color});
+        meshVerts_.push_back({.x = sx + ax - px, .y = sy + ay - py, .color = color});
+        meshVerts_.push_back({.x = sx - ax - px, .y = sy - ay - py, .color = color});
+        meshVerts_.push_back({.x = sx - ax + px, .y = sy - ay + py, .color = color});
+        for (const int i : {0, 1, 2, 0, 2, 3}) {
+            meshIdx_.push_back(base + i);
+        }
+    }
+}
+
+void HexanautScene::drawCloudTotem(Canvas& canvas, Vec2 worldCenter, int phase) const {
+    constexpr float kS = cfg::kHexSize;
+    const float r = std::max(9.0F, kS * zoom_ * 0.42F);
+    const float bob = std::sin((animTime_ * 2.6F) + (static_cast<float>(phase) * 0.7F)) * 2.5F;
+
+    const ScreenPos shadow = toScreen(worldCenter, cfg::kPrismLift);
+    canvas.fillCircle(shadow.x, shadow.y + (r * 0.28F), r * 0.85F, rgb(0, 0, 0, 80));
+
+    const ScreenPos c = toScreen(worldCenter, cfg::kPrismLift + 15.0F + bob);
+    // Dark slate-blue cup (trapezoid, wider at the rim).
+    const Color cupTop = rgb(92, 112, 150);
+    const Color cupBot = rgb(48, 60, 88);
+    const std::array<Canvas::Vertex, 4> cup{{
+        {.x = c.x - (r * 0.92F), .y = c.y + (r * 0.05F), .color = cupTop},
+        {.x = c.x + (r * 0.92F), .y = c.y + (r * 0.05F), .color = cupTop},
+        {.x = c.x + (r * 0.6F), .y = c.y + (r * 0.95F), .color = cupBot},
+        {.x = c.x - (r * 0.6F), .y = c.y + (r * 0.95F), .color = cupBot},
+    }};
+    canvas.fillConvexPolygon(cup);
+    // White fluffy cloud (overlapping puffs) resting on the rim.
+    const float cy = c.y - (r * 0.22F);
+    const Color cloud = rgb(246, 248, 252);
+    const Color cloudShade = rgb(206, 214, 228);
+    canvas.fillCircle(c.x - (r * 0.62F), cy + (r * 0.16F), r * 0.46F, cloudShade);
+    canvas.fillCircle(c.x + (r * 0.62F), cy + (r * 0.14F), r * 0.5F, cloudShade);
+    canvas.fillCircle(c.x, cy, r * 0.66F, cloud);
+    canvas.fillCircle(c.x - (r * 0.5F), cy + (r * 0.05F), r * 0.4F, cloud);
+    canvas.fillCircle(c.x + (r * 0.52F), cy + (r * 0.03F), r * 0.44F, cloud);
+    // Yellow lightning bolt poking up out of the cloud.
+    const Color bolt = rgb(248, 206, 60);
+    const float bx = c.x + (r * 0.12F);
+    const float by = cy - (r * 0.5F);
+    const float bw = std::max(2.5F, r * 0.16F);
+    canvas.line(bx - (r * 0.22F), by - (r * 0.55F), bx + (r * 0.08F), by, bw, bolt);
+    canvas.line(bx + (r * 0.08F), by, bx - (r * 0.14F), by + (r * 0.5F), bw, bolt);
+}
+
+void HexanautScene::drawSlowTotems(Canvas& canvas) {
+    const std::vector<hexanaut::SlowTotem>& totems = world_.slowTotems();
+    if (totems.empty()) {
+        return;
+    }
+    constexpr float kS = cfg::kHexSize;
+    const float fieldR = static_cast<float>(cfg::kSlowRadius) * cfg::kHexSpacing * 0.96F;
+
+    // 1. Falling-snow field for every captured totem, batched into one mesh.
+    meshVerts_.clear();
+    meshIdx_.clear();
+    for (std::size_t t = 0; t < totems.size(); ++t) {
+        const hexanaut::SlowTotem& tot = totems.at(t);
+        if (world_.ownerAt(tot.cell) == hexanaut::kNeutral) {
+            continue; // un-captured -> no field
+        }
+        const Vec2 cw = hexanaut::axialToWorld(tot.cell, kS);
+        const ScreenPos cs = toScreen(cw, cfg::kPrismLift);
+        const float margin = (fieldR + 40.0F) * zoom_;
+        if (cs.x < -margin || cs.x > layout::kWidthF + margin || cs.y < -margin ||
+            cs.y > layout::kHeightF + margin) {
+            continue; // field entirely off-screen
+        }
+        const float cycle = 2.0F * fieldR;
+        for (int k = 0; k < snow::kFlakesPerTotem; ++k) {
+            const float seed =
+                (static_cast<float>(t) * 131.0F) + (static_cast<float>(k) * 7.13F) + 0.5F;
+            const float hx = ((hash01(seed) * 2.0F) - 1.0F) * fieldR;
+            const float speed = snow::kFallSpeed * (0.55F + (0.9F * hash01(seed + 1.7F)));
+            const float fy =
+                std::fmod((hash01(seed + 2.3F) * cycle) + (animTime_ * speed), cycle) - fieldR;
+            const float sway = std::sin((animTime_ * 1.4F) + (seed * 3.1F)) * (kS * 0.18F);
+            const float wx = hx + sway;
+            const float dist2 = (wx * wx) + (fy * fy);
+            if (dist2 > fieldR * fieldR) {
+                continue; // confine to the field disc
+            }
+            const float edge =
+                std::clamp(2.0F * (1.0F - (std::sqrt(dist2) / fieldR)), 0.0F, 1.0F); // soft rim
+            const ScreenPos sp = toScreen({cw.x + wx, cw.y + fy}, cfg::kPrismLift + 12.0F);
+            const float sz =
+                std::max(2.0F, kS * zoom_ * 0.15F) * (0.7F + (0.7F * hash01(seed + 4.9F)));
+            Color col = rgb(255, 255, 255);
+            col.a = static_cast<std::uint8_t>(edge * 230.0F);
+            appendSnowflake(sp.x, sp.y, sz, col);
+        }
+    }
+    canvas.fillMesh(meshVerts_, meshIdx_);
+
+    // 2. Cloud-on-a-cup token for every on-screen totem (captured or not).
+    for (const hexanaut::SlowTotem& tot : totems) {
+        const Vec2 cw = hexanaut::axialToWorld(tot.cell, kS);
+        const ScreenPos base = toScreen(cw, cfg::kPrismLift);
+        constexpr float kMargin = 80.0F;
+        if (base.x < -kMargin || base.x > layout::kWidthF + kMargin || base.y < -kMargin ||
+            base.y > layout::kHeightF + kMargin) {
+            continue;
+        }
+        drawCloudTotem(canvas, cw, tot.cell.q);
+    }
+}
+
 void HexanautScene::drawAvatars(Canvas& canvas) const {
     for (const Player& p : world_.players()) {
         if (!p.alive) {
@@ -917,6 +1048,29 @@ void HexanautScene::drawMinimap(Canvas& canvas) {
         canvas.fillCircle(ix, iy, kIcon * 0.17F, pal::lighten(gem, 0.5F)); // core glint
     }
 
+    // Static slowing totems: a dark tile + white snowflake, owner-tinted border.
+    for (const hexanaut::SlowTotem& tot : world_.slowTotems()) {
+        const float ix = boxX + ((static_cast<float>(tot.cell.q) + 0.5F) * cw);
+        const float iy = boxY + ((static_cast<float>(tot.cell.r) + 0.5F) * ch);
+        const hexanaut::PlayerId owner = world_.ownerAt(tot.cell);
+        constexpr float kIcon = 6.0F;
+        const Color border =
+            owner == hexanaut::kNeutral ? rgb(150, 154, 164) : pal::topColor(owner);
+        canvas.fillRoundedRect(ix - kIcon - 1.5F, iy - kIcon - 1.5F, (kIcon + 1.5F) * 2.0F,
+                               (kIcon + 1.5F) * 2.0F, 3.0F, border);
+        canvas.fillRoundedRect(ix - kIcon, iy - kIcon, kIcon * 2.0F, kIcon * 2.0F, 2.5F,
+                               rgb(18, 20, 28));
+        // White snowflake: three crossed bars.
+        constexpr float kThird = std::numbers::pi_v<float> / 3.0F;
+        const float arm = kIcon * 0.72F;
+        for (int b = 0; b < 3; ++b) {
+            const float a = static_cast<float>(b) * kThird;
+            const float dx = std::cos(a) * arm;
+            const float dy = std::sin(a) * arm;
+            canvas.line(ix - dx, iy - dy, ix + dx, iy + dy, 1.6F, rgb(236, 244, 255));
+        }
+    }
+
     for (const Player& p : world_.players()) {
         if (!p.alive) {
             continue;
@@ -955,6 +1109,7 @@ void HexanautScene::render(Canvas& canvas) {
     drawTrailOutlines(canvas);
     drawTrails(canvas);
     drawShooters(canvas);
+    drawSlowTotems(canvas);
     drawPowerups(canvas);
     drawAvatars(canvas);
     drawParticles(canvas);

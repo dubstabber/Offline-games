@@ -436,6 +436,36 @@ void testShooterInertWhenUnowned() {
     assert(world.territoryCount(0) == before); // neutral shooter never fires
 }
 
+// Drive the human north through a slowing totem's field and report how far it got.
+// `totemOwner` owns the totem: id 1 (a rival) slows the human; id 0 (itself) is
+// immune. The human stays inside the radius-4 field for all 12 sub-steps.
+float runSlowScenario(og::hexanaut::PlayerId totemOwner) {
+    HexWorld world(0, 31);
+    const int n = static_cast<int>(world.players().size());
+    for (int id = 1; id < n; ++id) {
+        world.setAliveForTest(static_cast<PlayerId>(id), false); // drive only the human
+    }
+    const HexCoord totem{10, 10};
+    world.setSlowTotemForTest(totem);
+    world.setOwnerForTest(totem, totemOwner); // the totem acts for whoever owns it
+    world.placePlayerForTest(0, {10, 8}, HexDir::N); // 2 hexes inside the field
+    const Vec2 start = world.player().pos;
+    for (int k = 0; k < 12; ++k) {
+        world.setPlayerDesiredAngle(dirAngle(HexDir::N));
+        world.step();
+    }
+    return og::hexanaut::length(world.player().pos - start);
+}
+
+// An avatar standing in a rival's slowing field travels noticeably less than the
+// totem's owner (who is immune) over the same number of ticks.
+void testSlowFieldSlowsEnemies() {
+    const float slowed = runSlowScenario(1); // rival owns the totem -> human slowed
+    const float full = runSlowScenario(0);   // human owns the totem -> immune
+    assert(slowed > 0.0F);
+    assert(slowed < full * 0.75F);
+}
+
 // Stepping onto a Speed power-up lowers stepInterval and arms its timer; a Vision
 // power-up arms the vision timer.
 void testPowerupPickup() {
@@ -484,6 +514,7 @@ int main() {
     testShooterCaptures();
     testStaticShootersAtStart();
     testShooterInertWhenUnowned();
+    testSlowFieldSlowsEnemies();
     testHeadToHead();
     testPowerupPickup();
     std::puts("All Hexanaut tests passed.");

@@ -82,6 +82,12 @@ inline constexpr float kShooterLaserLife = 0.4F;      // seconds a fired laser b
     return kShooterFastInterval + ((kShooterSlowInterval - kShooterFastInterval) * t);
 }
 
+// ---- Slowing totem item -----------------------------------------------------
+// A static item that, while owned, blankets a hex radius around it in snow and
+// slows every OTHER avatar standing in that field (the owner is immune).
+inline constexpr int kSlowRadius = 4;       // hex radius of the slowing field
+inline constexpr float kSlowFactor = 1.85F; // multiplies stepInterval inside (>1 = slower)
+
 // ---- Per-difficulty parameters ----------------------------------------------
 // Lower stepInterval = faster. Harder = bigger map, more & faster bots, more
 // power-ups. powerupInterval == 0 disables power-up spawns for that difficulty.
@@ -94,7 +100,8 @@ struct DifficultyParams {
     float botStepInterval;
     float powerupInterval; // seconds between Speed/Vision spawn attempts (0 = none)
     int maxPowerups;
-    int shooterCount;      // static Shooter items placed once at game start (never respawn)
+    int shooterCount;   // static Shooter items placed once at game start (never respawn)
+    int slowTotemCount; // static SlowTotem items placed once at game start
 };
 
 [[nodiscard]] constexpr DifficultyParams paramsFor(int difficultyIndex) {
@@ -108,7 +115,8 @@ struct DifficultyParams {
                 .botStepInterval = 0.17F,
                 .powerupInterval = 0.0F,
                 .maxPowerups = 0,
-                .shooterCount = 4};
+                .shooterCount = 4,
+                .slowTotemCount = 3};
     case 2:
         return {.gridW = 72,
                 .gridH = 72,
@@ -118,7 +126,8 @@ struct DifficultyParams {
                 .botStepInterval = 0.11F,
                 .powerupInterval = 6.0F,
                 .maxPowerups = 4,
-                .shooterCount = 8};
+                .shooterCount = 8,
+                .slowTotemCount = 5};
     default:
         return {.gridW = 64,
                 .gridH = 64,
@@ -128,7 +137,8 @@ struct DifficultyParams {
                 .botStepInterval = 0.14F,
                 .powerupInterval = 9.0F,
                 .maxPowerups = 3,
-                .shooterCount = 6};
+                .shooterCount = 6,
+                .slowTotemCount = 4};
     }
 }
 

@@ -80,6 +80,12 @@ private:
     // captured, plus a faceted crystal token (dim grey while un-owned). Tokens are
     // driven by HexWorld::shooters(); bolts by lasers_; animTime_ bobs the gem.
     void drawShooters(Canvas& canvas) const;
+    // Slowing-totem items: a cloud-on-a-cup token for every totem, plus a batched
+    // mesh of falling snowflakes over the field of each captured (owned) one.
+    void drawSlowTotems(Canvas& canvas);
+    void drawCloudTotem(Canvas& canvas, hexanaut::Vec2 worldCenter, int phase) const;
+    // Append one 6-pointed snowflake (3 crossed bars) into the shared mesh buffers.
+    void appendSnowflake(float sx, float sy, float size, Color color);
     void drawAvatars(Canvas& canvas) const;
     void drawHud(Canvas& canvas) const;
     void drawLeaderboard(Canvas& canvas) const;

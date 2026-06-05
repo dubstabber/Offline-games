@@ -60,7 +60,9 @@ HexWorld::HexWorld(int difficultyIndex, std::uint32_t seed)
         spawnHome(players_.back(), findSpawn(config::kHomeRadius + 1), config::kHomeRadius);
     }
 
-    generateShooters(params.shooterCount); // static items, placed once after all homes
+    // Static items, placed once after all homes exist (so none land on a home).
+    generateShooters(params.shooterCount);
+    generateSlowTotems(params.slowTotemCount);
 }
 
 void HexWorld::spawnHome(Player& p, HexCoord center, int radius) {
@@ -192,29 +194,56 @@ void HexWorld::applyPowerup(Player& p, PowerUp type) {
     case PowerUp::Vision:
         p.visionTimer = config::kVisionDuration;
         break;
-    case PowerUp::Shooter: // not a collectible buff; handled by updateShooters
+    case PowerUp::Shooter:   // not a collectible buff; handled by updateShooters
+    case PowerUp::SlowTotem: // not a collectible buff; a positional slowing field
     case PowerUp::None:
         break;
     }
 }
 
-void HexWorld::generateShooters(int count) {
-    // All shooters are placed up front on open ground (an un-captured shooter does
-    // nothing, so each sits as a contestable prize until a player's territory
-    // reaches it). Static for the whole match — they never move or respawn.
+bool HexWorld::findFreeItemCell(HexCoord& out) {
+    // Open ground only: an un-captured item does nothing, so each sits as a
+    // contestable prize until a player's territory reaches it.
     std::uniform_int_distribution<int> qd(2, grid_.width() - 3);
     std::uniform_int_distribution<int> rd(2, grid_.height() - 3);
-    for (int i = 0; i < count; ++i) {
-        for (int attempt = 0; attempt < 80; ++attempt) {
-            const HexCoord c{qd(rng_), rd(rng_)};
-            Cell& cell = grid_.at(c);
-            if (cell.owner == kNeutral && cell.trailOwner == kNoTrail && cell.powerup == 0) {
-                cell.powerup = static_cast<std::uint8_t>(PowerUp::Shooter);
-                shooters_.push_back(Shooter{.cell = c});
-                break;
-            }
+    for (int attempt = 0; attempt < 80; ++attempt) {
+        const HexCoord c{qd(rng_), rd(rng_)};
+        const Cell& cell = grid_.at(c);
+        if (cell.owner == kNeutral && cell.trailOwner == kNoTrail && cell.powerup == 0) {
+            out = c;
+            return true;
         }
     }
+    return false;
+}
+
+void HexWorld::generateShooters(int count) {
+    // Placed up front and static for the whole match — they never move or respawn.
+    for (int i = 0; i < count; ++i) {
+        HexCoord c{};
+        if (findFreeItemCell(c)) {
+            grid_.at(c).powerup = static_cast<std::uint8_t>(PowerUp::Shooter);
+            shooters_.push_back(Shooter{.cell = c});
+        }
+    }
+}
+
+void HexWorld::generateSlowTotems(int count) {
+    for (int i = 0; i < count; ++i) {
+        HexCoord c{};
+        if (findFreeItemCell(c)) {
+            grid_.at(c).powerup = static_cast<std::uint8_t>(PowerUp::SlowTotem);
+            slowTotems_.push_back(SlowTotem{.cell = c});
+        }
+    }
+}
+
+bool HexWorld::inEnemySlowField(PlayerId id, HexCoord cell) const {
+    return std::ranges::any_of(slowTotems_, [&](const SlowTotem& t) {
+        const PlayerId owner = grid_.at(t.cell).owner;
+        return owner != kNeutral && owner != id &&
+               hexDistance(t.cell, cell) <= config::kSlowRadius;
+    });
 }
 
 bool HexWorld::nearestShooterTarget(HexCoord from, PlayerId owner, HexCoord& out,
@@ -310,7 +339,12 @@ std::vector<HexWorld::Move> HexWorld::integrateMotion() {
         }
         // Curve toward the desired heading by at most one turn-rate step.
         const float delta = std::clamp(wrapAngle(p.desiredAngle - p.angle), -maxTurn, maxTurn);
-        const float stepLen = (config::kHexSpacing / p.stepInterval) * dt;
+        // Standing in a rival's slowing-totem field stretches the per-hex time.
+        float stepInterval = p.stepInterval;
+        if (inEnemySlowField(p.id, p.cell)) {
+            stepInterval *= config::kSlowFactor;
+        }
+        const float stepLen = (config::kHexSpacing / stepInterval) * dt;
         const float ang = deflectAngle(p.pos, p.angle + delta, stepLen); // slide off walls
         const Vec2 npos = p.pos + (unitFromAngle(ang) * stepLen);
         const HexCoord ncell = worldToAxial(npos, config::kHexSize);
@@ -438,9 +472,10 @@ void HexWorld::commitMoves(const std::vector<Move>& moves, const std::vector<cha
             tc.trailOwner = p.id;
             p.trail.push_back(p.cell);
         }
-        // Speed/Vision are collected on contact; the Shooter is a fixed item that
-        // is never picked up (it acts for whoever owns its cell), so step over it.
-        if (tc.powerup != 0 && tc.powerup != static_cast<std::uint8_t>(PowerUp::Shooter)) {
+        // Only Speed/Vision are collected on contact; the Shooter and SlowTotem are
+        // fixed items (they act for whoever owns their cell), so step over them.
+        if (tc.powerup == static_cast<std::uint8_t>(PowerUp::Speed) ||
+            tc.powerup == static_cast<std::uint8_t>(PowerUp::Vision)) {
             applyPowerup(p, static_cast<PowerUp>(tc.powerup));
             tc.powerup = 0;
             if (activePowerups_ > 0) {
