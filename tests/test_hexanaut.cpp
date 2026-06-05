@@ -466,6 +466,20 @@ void testSlowFieldSlowsEnemies() {
     assert(slowed < full * 0.75F);
 }
 
+// A spy dish reveals the minimap (hasSpyReveal) only for the player that owns its
+// cell; it is inert while neutral, and ownership can change hands.
+void testSpyDishReveal() {
+    HexWorld world(0, 9);
+    const HexCoord s{15, 15};
+    world.setSpyDishForTest(s);
+    assert(!world.hasSpyReveal(0)); // neutral dish -> nobody revealed
+    world.setOwnerForTest(s, 1);
+    assert(!world.hasSpyReveal(0)); // a rival holds it -> the human stays blind
+    assert(world.hasSpyReveal(1));  // ...but the predicate tracks the real owner
+    world.setOwnerForTest(s, 0);
+    assert(world.hasSpyReveal(0)); // human captured it -> revealed
+}
+
 // Stepping onto a Speed power-up lowers stepInterval and arms its timer; a Vision
 // power-up arms the vision timer.
 void testPowerupPickup() {
@@ -515,6 +529,7 @@ int main() {
     testStaticShootersAtStart();
     testShooterInertWhenUnowned();
     testSlowFieldSlowsEnemies();
+    testSpyDishReveal();
     testHeadToHead();
     testPowerupPickup();
     std::puts("All Hexanaut tests passed.");

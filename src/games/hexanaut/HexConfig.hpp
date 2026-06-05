@@ -102,6 +102,7 @@ struct DifficultyParams {
     int maxPowerups;
     int shooterCount;   // static Shooter items placed once at game start (never respawn)
     int slowTotemCount; // static SlowTotem items placed once at game start
+    int spyDishCount;   // static SpyDish items placed once at game start
 };
 
 [[nodiscard]] constexpr DifficultyParams paramsFor(int difficultyIndex) {
@@ -116,7 +117,8 @@ struct DifficultyParams {
                 .powerupInterval = 0.0F,
                 .maxPowerups = 0,
                 .shooterCount = 4,
-                .slowTotemCount = 3};
+                .slowTotemCount = 3,
+                .spyDishCount = 2};
     case 2:
         return {.gridW = 72,
                 .gridH = 72,
@@ -127,7 +129,8 @@ struct DifficultyParams {
                 .powerupInterval = 6.0F,
                 .maxPowerups = 4,
                 .shooterCount = 8,
-                .slowTotemCount = 5};
+                .slowTotemCount = 5,
+                .spyDishCount = 4};
     default:
         return {.gridW = 64,
                 .gridH = 64,
@@ -138,7 +141,8 @@ struct DifficultyParams {
                 .powerupInterval = 9.0F,
                 .maxPowerups = 3,
                 .shooterCount = 6,
-                .slowTotemCount = 4};
+                .slowTotemCount = 4,
+                .spyDishCount = 3};
     }
 }
 

@@ -84,12 +84,18 @@ private:
     // mesh of falling snowflakes over the field of each captured (owned) one.
     void drawSlowTotems(Canvas& canvas);
     void drawCloudTotem(Canvas& canvas, hexanaut::Vec2 worldCenter, int phase) const;
+    // Spy-dish items: a red-drum-plus-satellite-dish token for each one.
+    void drawSpyDishes(Canvas& canvas) const;
+    void drawSpyDish(Canvas& canvas, hexanaut::Vec2 worldCenter, int phase) const;
     // Append one 6-pointed snowflake (3 crossed bars) into the shared mesh buffers.
     void appendSnowflake(float sx, float sy, float size, Color color);
     void drawAvatars(Canvas& canvas) const;
     void drawHud(Canvas& canvas) const;
     void drawLeaderboard(Canvas& canvas) const;
     void drawMinimap(Canvas& canvas);
+    // Draw the static-item markers (shooter / slow totem / spy dish) on the minimap.
+    // `spy` reveals each item's owner tint; otherwise only your own items are tinted.
+    void drawMinimapItems(Canvas& canvas, float boxX, float boxY, float cw, float ch, bool spy);
     void drawOverlay(Canvas& canvas) const;
 
     struct PowerupDraw {

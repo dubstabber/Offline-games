@@ -19,12 +19,13 @@ inline constexpr PlayerId kNeutral = 0xFF;
 inline constexpr PlayerId kNoTrail = 0xFF;
 
 // Map items. Stored in Cell::powerup as the underlying byte (0 = none). Speed and
-// Vision are collectible buffs (picked up by stepping on them). Shooter and
-// SlowTotem are persistent, territory-bound items: never picked up — they act for
+// Vision are collectible buffs (picked up by stepping on them). Shooter, SlowTotem
+// and SpyDish are persistent, territory-bound items: never picked up — they act for
 // whoever currently owns the cell they sit on, and can be stolen by capturing that
 // cell. Shooter captures nearby land with lasers (HexWorld::updateShooters);
-// SlowTotem slows every other avatar standing in its field (see inEnemySlowField).
-enum class PowerUp : std::uint8_t { None, Speed, Vision, Shooter, SlowTotem };
+// SlowTotem slows every other avatar in its field (inEnemySlowField); SpyDish, while
+// owned by the human, reveals all territories on the minimap (HexWorld::hasSpyReveal).
+enum class PowerUp : std::uint8_t { None, Speed, Vision, Shooter, SlowTotem, SpyDish };
 
 struct Vec2 {
     float x = 0.0F;

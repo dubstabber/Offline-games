@@ -809,6 +809,66 @@ void HexanautScene::drawSlowTotems(Canvas& canvas) {
     }
 }
 
+void HexanautScene::drawSpyDish(Canvas& canvas, Vec2 worldCenter, int phase) const {
+    constexpr float kS = cfg::kHexSize;
+    const float r = std::max(9.0F, kS * zoom_ * 0.46F);
+    const float bob = std::sin((animTime_ * 2.4F) + (static_cast<float>(phase) * 0.6F)) * 2.0F;
+
+    const ScreenPos shadow = toScreen(worldCenter, cfg::kPrismLift);
+    canvas.fillCircle(shadow.x, shadow.y + (r * 0.3F), r * 0.85F, rgb(0, 0, 0, 80));
+
+    const ScreenPos c = toScreen(worldCenter, cfg::kPrismLift + 13.0F + bob);
+    // Red drum base with a light top rim.
+    canvas.fillRoundedRect(c.x - (r * 0.58F), c.y, r * 1.16F, r * 0.92F, r * 0.22F, rgb(206, 58, 58));
+    canvas.fillRoundedRect(c.x - (r * 0.6F), c.y - (r * 0.16F), r * 1.2F, r * 0.32F, r * 0.16F,
+                           rgb(236, 238, 244));
+    // Short pole up to the dish.
+    const float dcx = c.x + (r * 0.06F);
+    const float dcy = c.y - (r * 0.74F);
+    canvas.line(c.x, c.y - (r * 0.05F), dcx, dcy + (r * 0.25F), std::max(2.0F, r * 0.12F),
+                rgb(74, 78, 94));
+    // Tilted blue parabolic dish (a rotated ellipse, gradient-shaded).
+    constexpr int kSeg = 16;
+    constexpr float kRot = -0.5F; // radians
+    const float cosR = std::cos(kRot);
+    const float sinR = std::sin(kRot);
+    const float erx = r * 0.8F;
+    const float ery = r * 0.46F;
+    std::array<Canvas::Vertex, kSeg> dish{};
+    for (int k = 0; k < kSeg; ++k) {
+        const float a =
+            (static_cast<float>(k) / static_cast<float>(kSeg)) * 2.0F * std::numbers::pi_v<float>;
+        const float ex = std::cos(a) * erx;
+        const float ey = std::sin(a) * ery;
+        const float ty = std::clamp(((ey / ery) * 0.5F) + 0.5F, 0.0F, 1.0F);
+        dish.at(static_cast<std::size_t>(k)) = {.x = dcx + ((ex * cosR) - (ey * sinR)),
+                                                .y = dcy + ((ex * sinR) + (ey * cosR)),
+                                                .color = pal::mix(rgb(126, 156, 244),
+                                                                  rgb(44, 68, 168), ty)};
+    }
+    canvas.fillConvexPolygon(dish);
+    canvas.fillCircle(dcx, dcy, r * 0.17F, rgb(34, 52, 128)); // concave hub
+    // Feed arm to the focal point.
+    const float fx = dcx + (r * 0.52F);
+    const float fy = dcy - (r * 0.44F);
+    canvas.line(dcx, dcy, fx, fy, std::max(1.5F, r * 0.08F), rgb(222, 226, 236));
+    canvas.fillCircle(fx, fy, r * 0.13F, rgb(232, 84, 84));
+}
+
+void HexanautScene::drawSpyDishes(Canvas& canvas) const {
+    constexpr float kS = cfg::kHexSize;
+    for (const hexanaut::SpyDish& d : world_.spyDishes()) {
+        const Vec2 cw = hexanaut::axialToWorld(d.cell, kS);
+        const ScreenPos base = toScreen(cw, cfg::kPrismLift);
+        constexpr float kMargin = 80.0F;
+        if (base.x < -kMargin || base.x > layout::kWidthF + kMargin || base.y < -kMargin ||
+            base.y > layout::kHeightF + kMargin) {
+            continue;
+        }
+        drawSpyDish(canvas, cw, d.cell.q);
+    }
+}
+
 void HexanautScene::drawAvatars(Canvas& canvas) const {
     for (const Player& p : world_.players()) {
         if (!p.alive) {
@@ -986,6 +1046,66 @@ void HexanautScene::drawLeaderboard(Canvas& canvas) const {
     }
 }
 
+void HexanautScene::drawMinimapItems(Canvas& canvas, float boxX, float boxY, float cw, float ch,
+                                     bool spy) {
+    // Item markers stay on the map always; their owner tint is hidden the same way as
+    // territories — your own items and the reveal aside.
+    const auto itemBorder = [&](hexanaut::PlayerId owner) {
+        return (owner != hexanaut::kNeutral && (owner == 0 || spy)) ? pal::topColor(owner)
+                                                                    : rgb(150, 154, 164);
+    };
+    constexpr float kIcon = 6.0F; // tile half-size
+    const auto tile = [&](float ix, float iy, hexanaut::PlayerId owner) {
+        canvas.fillRoundedRect(ix - kIcon - 1.5F, iy - kIcon - 1.5F, (kIcon + 1.5F) * 2.0F,
+                               (kIcon + 1.5F) * 2.0F, 3.0F, itemBorder(owner));
+        canvas.fillRoundedRect(ix - kIcon, iy - kIcon, kIcon * 2.0F, kIcon * 2.0F, 2.5F,
+                               rgb(18, 20, 28));
+    };
+    const auto cellX = [&](int q) { return boxX + ((static_cast<float>(q) + 0.5F) * cw); };
+    const auto cellY = [&](int r) { return boxY + ((static_cast<float>(r) + 0.5F) * ch); };
+
+    // Shooter: magenta crystal.
+    for (const hexanaut::Shooter& s : world_.shooters()) {
+        const float ix = cellX(s.cell.q);
+        const float iy = cellY(s.cell.r);
+        tile(ix, iy, world_.ownerAt(s.cell));
+        const Color gem = rgb(232, 70, 200);
+        const std::array<Canvas::Vertex, 4> crystal{{
+            {.x = ix, .y = iy - (kIcon * 0.62F), .color = pal::lighten(gem, 0.35F)},
+            {.x = ix + (kIcon * 0.5F), .y = iy, .color = gem},
+            {.x = ix, .y = iy + (kIcon * 0.62F), .color = pal::darken(gem, 0.4F)},
+            {.x = ix - (kIcon * 0.5F), .y = iy, .color = gem},
+        }};
+        canvas.fillConvexPolygon(crystal);
+        canvas.fillCircle(ix, iy, kIcon * 0.17F, pal::lighten(gem, 0.5F));
+    }
+    // Slow totem: white snowflake (three crossed bars).
+    for (const hexanaut::SlowTotem& tot : world_.slowTotems()) {
+        const float ix = cellX(tot.cell.q);
+        const float iy = cellY(tot.cell.r);
+        tile(ix, iy, world_.ownerAt(tot.cell));
+        constexpr float kThird = std::numbers::pi_v<float> / 3.0F;
+        const float arm = kIcon * 0.72F;
+        for (int b = 0; b < 3; ++b) {
+            const float a = static_cast<float>(b) * kThird;
+            const float dx = std::cos(a) * arm;
+            const float dy = std::sin(a) * arm;
+            canvas.line(ix - dx, iy - dy, ix + dx, iy + dy, 1.6F, rgb(236, 244, 255));
+        }
+    }
+    // Spy dish: small blue satellite dish.
+    for (const hexanaut::SpyDish& d : world_.spyDishes()) {
+        const float ix = cellX(d.cell.q);
+        const float iy = cellY(d.cell.r);
+        tile(ix, iy, world_.ownerAt(d.cell));
+        const float hubx = ix - (kIcon * 0.12F);
+        const float huby = iy + (kIcon * 0.22F);
+        canvas.fillCircle(hubx, huby, kIcon * 0.5F, rgb(96, 126, 232));
+        canvas.fillCircle(hubx, huby, kIcon * 0.22F, rgb(40, 58, 140));
+        canvas.line(hubx, huby, ix + (kIcon * 0.55F), iy - (kIcon * 0.5F), 1.4F, rgb(224, 228, 238));
+    }
+}
+
 void HexanautScene::drawMinimap(Canvas& canvas) {
     const hexanaut::HexGrid& grid = world_.grid();
     constexpr float kMap = 200.0F;
@@ -999,14 +1119,18 @@ void HexanautScene::drawMinimap(Canvas& canvas) {
     const float ch = kMap / static_cast<float>(grid.height());
     const float half = std::max(1.4F, std::max(cw, ch) * 0.7F);
 
+    // A spy dish (held by the human) reveals every territory and rival marker; until
+    // then only your own land and position show.
+    const bool spy = world_.hasSpyReveal(0);
+
     // Owned cells batched into one mesh (the field buffer is free to reuse here).
     meshVerts_.clear();
     meshIdx_.clear();
     for (int r = 0; r < grid.height(); ++r) {
         for (int q = 0; q < grid.width(); ++q) {
             const hexanaut::Cell& cell = grid.at({q, r});
-            if (cell.owner == hexanaut::kNeutral) {
-                continue;
+            if (cell.owner == hexanaut::kNeutral || (cell.owner != 0 && !spy)) {
+                continue; // rivals' land stays hidden until a spy dish is captured
             }
             const float px = boxX + ((static_cast<float>(q) + 0.5F) * cw);
             const float py = boxY + ((static_cast<float>(r) + 0.5F) * ch);
@@ -1023,57 +1147,11 @@ void HexanautScene::drawMinimap(Canvas& canvas) {
     }
     canvas.fillMesh(meshVerts_, meshIdx_);
 
-    // Static shooter items: a small dark tile + magenta crystal (the in-game icon),
-    // pinned at fixed cells. The border tints to the current owner (grey while
-    // un-claimed) so the minimap shows where every item is and who holds it.
-    for (const hexanaut::Shooter& s : world_.shooters()) {
-        const float ix = boxX + ((static_cast<float>(s.cell.q) + 0.5F) * cw);
-        const float iy = boxY + ((static_cast<float>(s.cell.r) + 0.5F) * ch);
-        const hexanaut::PlayerId owner = world_.ownerAt(s.cell);
-        constexpr float kIcon = 6.0F; // tile half-size
-        const Color border =
-            owner == hexanaut::kNeutral ? rgb(150, 154, 164) : pal::topColor(owner);
-        canvas.fillRoundedRect(ix - kIcon - 1.5F, iy - kIcon - 1.5F, (kIcon + 1.5F) * 2.0F,
-                               (kIcon + 1.5F) * 2.0F, 3.0F, border);
-        canvas.fillRoundedRect(ix - kIcon, iy - kIcon, kIcon * 2.0F, kIcon * 2.0F, 2.5F,
-                               rgb(18, 20, 28));
-        const Color gem = rgb(232, 70, 200);
-        const std::array<Canvas::Vertex, 4> crystal{{
-            {.x = ix, .y = iy - (kIcon * 0.62F), .color = pal::lighten(gem, 0.35F)},
-            {.x = ix + (kIcon * 0.5F), .y = iy, .color = gem},
-            {.x = ix, .y = iy + (kIcon * 0.62F), .color = pal::darken(gem, 0.4F)},
-            {.x = ix - (kIcon * 0.5F), .y = iy, .color = gem},
-        }};
-        canvas.fillConvexPolygon(crystal);
-        canvas.fillCircle(ix, iy, kIcon * 0.17F, pal::lighten(gem, 0.5F)); // core glint
-    }
-
-    // Static slowing totems: a dark tile + white snowflake, owner-tinted border.
-    for (const hexanaut::SlowTotem& tot : world_.slowTotems()) {
-        const float ix = boxX + ((static_cast<float>(tot.cell.q) + 0.5F) * cw);
-        const float iy = boxY + ((static_cast<float>(tot.cell.r) + 0.5F) * ch);
-        const hexanaut::PlayerId owner = world_.ownerAt(tot.cell);
-        constexpr float kIcon = 6.0F;
-        const Color border =
-            owner == hexanaut::kNeutral ? rgb(150, 154, 164) : pal::topColor(owner);
-        canvas.fillRoundedRect(ix - kIcon - 1.5F, iy - kIcon - 1.5F, (kIcon + 1.5F) * 2.0F,
-                               (kIcon + 1.5F) * 2.0F, 3.0F, border);
-        canvas.fillRoundedRect(ix - kIcon, iy - kIcon, kIcon * 2.0F, kIcon * 2.0F, 2.5F,
-                               rgb(18, 20, 28));
-        // White snowflake: three crossed bars.
-        constexpr float kThird = std::numbers::pi_v<float> / 3.0F;
-        const float arm = kIcon * 0.72F;
-        for (int b = 0; b < 3; ++b) {
-            const float a = static_cast<float>(b) * kThird;
-            const float dx = std::cos(a) * arm;
-            const float dy = std::sin(a) * arm;
-            canvas.line(ix - dx, iy - dy, ix + dx, iy + dy, 1.6F, rgb(236, 244, 255));
-        }
-    }
+    drawMinimapItems(canvas, boxX, boxY, cw, ch, spy);
 
     for (const Player& p : world_.players()) {
-        if (!p.alive) {
-            continue;
+        if (!p.alive || (p.isBot && !spy)) {
+            continue; // rivals' positions stay hidden until a spy dish is captured
         }
         const float px = boxX + ((static_cast<float>(p.cell.q) + 0.5F) * cw);
         const float py = boxY + ((static_cast<float>(p.cell.r) + 0.5F) * ch);
@@ -1110,6 +1188,7 @@ void HexanautScene::render(Canvas& canvas) {
     drawTrails(canvas);
     drawShooters(canvas);
     drawSlowTotems(canvas);
+    drawSpyDishes(canvas);
     drawPowerups(canvas);
     drawAvatars(canvas);
     drawParticles(canvas);

@@ -72,6 +72,14 @@ struct SlowTotem {
     HexCoord cell{};
 };
 
+// A persistent spy dish. While its cell is owned by the human, every territory is
+// revealed on the minimap (otherwise rivals' territories and position markers are
+// hidden). A pure intel item — owning more than one is no better than one. Owned
+// by whoever owns `cell`, so it can be stolen back by recapturing the cell.
+struct SpyDish {
+    HexCoord cell{};
+};
+
 class HexWorld {
 public:
     HexWorld(int difficultyIndex, std::uint32_t seed);
@@ -88,6 +96,10 @@ public:
     [[nodiscard]] const std::vector<Player>& players() const { return players_; }
     [[nodiscard]] const std::vector<Shooter>& shooters() const { return shooters_; }
     [[nodiscard]] const std::vector<SlowTotem>& slowTotems() const { return slowTotems_; }
+    [[nodiscard]] const std::vector<SpyDish>& spyDishes() const { return spyDishes_; }
+    // True if `id` owns at least one spy dish (so the minimap reveals all
+    // territories for them). Owning several is no different from owning one.
+    [[nodiscard]] bool hasSpyReveal(PlayerId id) const;
     [[nodiscard]] const HexGrid& grid() const { return grid_; }
     [[nodiscard]] bool playerAlive() const { return players_.front().alive; }
     [[nodiscard]] int totalCells() const { return totalCells_; }
@@ -132,6 +144,10 @@ public:
         grid_.at(c).powerup = static_cast<std::uint8_t>(PowerUp::SlowTotem);
         slowTotems_.push_back(SlowTotem{.cell = c});
     }
+    void setSpyDishForTest(HexCoord c) {
+        grid_.at(c).powerup = static_cast<std::uint8_t>(PowerUp::SpyDish);
+        spyDishes_.push_back(SpyDish{.cell = c});
+    }
     void advanceShootersForTest(int ticks) {
         for (int i = 0; i < ticks; ++i) {
             updateShooters();
@@ -155,6 +171,7 @@ private:
     // or respawn, shown on the minimap and contested via territory.
     void generateShooters(int count);
     void generateSlowTotems(int count);
+    void generateSpyDishes(int count);
     // A random neutral, trail-free, item-free cell to drop a static item on; false
     // if none found within the attempt budget. Shared by the generators above.
     [[nodiscard]] bool findFreeItemCell(HexCoord& out);
@@ -201,6 +218,7 @@ private:
     std::vector<std::unique_ptr<BotController>> bots_; // parallel to players_; null for the human
     std::vector<Shooter> shooters_;                    // persistent laser items on the board
     std::vector<SlowTotem> slowTotems_;                // persistent slowing-field items
+    std::vector<SpyDish> spyDishes_;                   // persistent minimap-reveal items
     std::mt19937 rng_;
     int totalCells_;
     std::vector<std::uint8_t> visited_; // flood-fill scratch, sized to the grid

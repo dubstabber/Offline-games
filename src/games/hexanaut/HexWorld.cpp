@@ -63,6 +63,7 @@ HexWorld::HexWorld(int difficultyIndex, std::uint32_t seed)
     // Static items, placed once after all homes exist (so none land on a home).
     generateShooters(params.shooterCount);
     generateSlowTotems(params.slowTotemCount);
+    generateSpyDishes(params.spyDishCount);
 }
 
 void HexWorld::spawnHome(Player& p, HexCoord center, int radius) {
@@ -196,6 +197,7 @@ void HexWorld::applyPowerup(Player& p, PowerUp type) {
         break;
     case PowerUp::Shooter:   // not a collectible buff; handled by updateShooters
     case PowerUp::SlowTotem: // not a collectible buff; a positional slowing field
+    case PowerUp::SpyDish:   // not a collectible buff; a minimap-reveal field
     case PowerUp::None:
         break;
     }
@@ -236,6 +238,21 @@ void HexWorld::generateSlowTotems(int count) {
             slowTotems_.push_back(SlowTotem{.cell = c});
         }
     }
+}
+
+void HexWorld::generateSpyDishes(int count) {
+    for (int i = 0; i < count; ++i) {
+        HexCoord c{};
+        if (findFreeItemCell(c)) {
+            grid_.at(c).powerup = static_cast<std::uint8_t>(PowerUp::SpyDish);
+            spyDishes_.push_back(SpyDish{.cell = c});
+        }
+    }
+}
+
+bool HexWorld::hasSpyReveal(PlayerId id) const {
+    return std::ranges::any_of(spyDishes_,
+                               [&](const SpyDish& d) { return grid_.at(d.cell).owner == id; });
 }
 
 bool HexWorld::inEnemySlowField(PlayerId id, HexCoord cell) const {
