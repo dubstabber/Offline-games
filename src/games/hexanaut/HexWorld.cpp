@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <deque>
+#include <limits>
 #include <numbers>
 #include <unordered_set>
 #include <utility>
@@ -468,23 +469,41 @@ HexCoord HexWorld::findSpawn(int clearRadius) {
     const int margin = clearRadius + 1;
     std::uniform_int_distribution<int> qd(margin, grid_.width() - 1 - margin);
     std::uniform_int_distribution<int> rd(margin, grid_.height() - 1 - margin);
+    // Score each sampled spot: +1 per already-owned cell in the would-be home, plus
+    // a heavy strike for sitting next to a live avatar. A perfect (0) spot returns
+    // at once. On a crowded map — e.g. one player owns most of it — no perfect spot
+    // exists; rather than always falling back to the grid centre (which piled every
+    // respawning bot onto the SAME cell, where they collided forever), keep the
+    // lowest-scoring sample. It is randomised and avoids other avatars, so
+    // simultaneous respawns scatter into the emptiest gaps instead of stacking.
+    HexCoord best{grid_.width() / 2, grid_.height() / 2};
+    int bestScore = std::numeric_limits<int>::max();
     for (int attempt = 0; attempt < 200; ++attempt) {
         const HexCoord c{qd(rng_), rd(rng_)};
-        bool clear = true;
-        for (int q = c.q - clearRadius; q <= c.q + clearRadius && clear; ++q) {
-            for (int r = c.r - clearRadius; r <= c.r + clearRadius && clear; ++r) {
+        int score = 0;
+        for (int q = c.q - clearRadius; q <= c.q + clearRadius; ++q) {
+            for (int r = c.r - clearRadius; r <= c.r + clearRadius; ++r) {
                 const HexCoord h{q, r};
                 if (grid_.contains(h) && hexDistance(c, h) <= clearRadius &&
                     grid_.at(h).owner != kNeutral) {
-                    clear = false;
+                    ++score;
                 }
             }
         }
-        if (clear) {
-            return c;
+        for (const Player& p : players_) {
+            if (p.alive && hexDistance(p.cell, c) <= clearRadius * 2) {
+                score += 50; // next to a live avatar invites an instant collision
+            }
+        }
+        if (score == 0) {
+            return c; // empty and isolated — ideal
+        }
+        if (score < bestScore) {
+            bestScore = score;
+            best = c;
         }
     }
-    return {grid_.width() / 2, grid_.height() / 2}; // fallback (crowded map)
+    return best;
 }
 
 // ---- HexWorldView (read-only window for bots) -------------------------------

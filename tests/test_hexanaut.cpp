@@ -332,6 +332,38 @@ void testTrailCutCapturesTerritory() {
     assert(world.ownerAt(victimHome) == 0);               // victim's cells are now the cutter's
 }
 
+// On a saturated map (one player owns nearly everything) there is no clear spawn
+// blob, so respawning bots must scatter to different cells instead of all piling
+// onto the grid centre, where they used to collide endlessly.
+void testCrowdedRespawnScatters() {
+    HexWorld world(0, 5);
+    const int w = world.grid().width();
+    const int h = world.grid().height();
+    for (int q = 0; q < w; ++q) {
+        for (int r = 0; r < h; ++r) {
+            world.setOwnerForTest({q, r}, 0); // blanket the board: no clear blob anywhere
+        }
+    }
+    const int n = static_cast<int>(world.players().size());
+    for (int id = 1; id < n; ++id) {
+        world.setAliveForTest(static_cast<PlayerId>(id), false);
+    }
+    world.step(); // respawns every dead bot through findSpawn's crowded-map path
+
+    std::vector<HexCoord> spots;
+    for (int id = 1; id < n; ++id) {
+        if (world.players()[id].alive) {
+            spots.push_back(world.players()[id].cell);
+        }
+    }
+    assert(spots.size() >= 2);
+    for (std::size_t i = 0; i < spots.size(); ++i) {
+        for (std::size_t j = i + 1; j < spots.size(); ++j) {
+            assert(spots.at(i) != spots.at(j)); // no two bots respawned on the same cell
+        }
+    }
+}
+
 // Two players moving into the same cell on the same tick both fall.
 void testHeadToHead() {
     HexWorld world(0, 55);
@@ -448,6 +480,7 @@ int main() {
     testDeterminism();
     testTrailCutDeath();
     testTrailCutCapturesTerritory();
+    testCrowdedRespawnScatters();
     testShooterCaptures();
     testStaticShootersAtStart();
     testShooterInertWhenUnowned();
