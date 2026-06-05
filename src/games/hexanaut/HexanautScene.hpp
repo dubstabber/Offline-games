@@ -144,6 +144,10 @@ private:
     bool recorded_ = false;
     float finalPercent_ = 0.0F;
     float bestPercent_ = 0.0F;
+    // The player's territory % from the last tick it was alive. Dying frees its
+    // territory to 0 inside the sim, so game-over reads this snapshot (taken before
+    // the fatal step) instead of the now-zeroed live value.
+    float lastLivePercent_ = 0.0F;
 
     // Reused geometry buffers so the whole field submits in one fillMesh call.
     std::vector<Canvas::Vertex> meshVerts_;

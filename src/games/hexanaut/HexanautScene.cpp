@@ -146,6 +146,8 @@ HexanautScene::HexanautScene(SceneManager& manager, Difficulty difficulty)
     : manager_(manager), difficulty_(difficulty),
       world_(difficultyToIndex(difficulty), std::random_device{}()),
       bestPercent_(static_cast<float>(hexanautBestField(settings(), difficulty)) / 10.0F),
+      // seed with the starting home territory (world_ is constructed before this)
+      lastLivePercent_(world_.playerPercent()),
       homeButton_(kHome, kRowX, kButtonRowY, kHomeSize, kHomeSize),
       retryButton_("RETRY", kRowX + kHomeSize + kButtonGap, kButtonRowY, kRetryW, kHomeSize) {
     const Vec2 c = avatarWorld(world_.player());
@@ -235,6 +237,9 @@ void HexanautScene::update(float dtSeconds) {
         while (accum_ >= cfg::kFixedDt) {
             world_.step();
             accum_ -= cfg::kFixedDt;
+            if (world_.playerAlive()) {
+                lastLivePercent_ = world_.playerPercent(); // remember it before any fatal step
+            }
         }
         spawnCutFx(dtSeconds);
         if (!world_.playerAlive()) {
@@ -251,7 +256,7 @@ void HexanautScene::enterGameOver() {
         return;
     }
     phase_ = Phase::GameOver;
-    finalPercent_ = world_.playerPercent();
+    finalPercent_ = lastLivePercent_; // live value is 0 once the sim freed the dead player's land
     bestPercent_ = std::max(bestPercent_, finalPercent_);
     Settings& s = settings();
     hexanautBestField(s, difficulty_) = static_cast<int>(std::lround(bestPercent_ * 10.0F));
