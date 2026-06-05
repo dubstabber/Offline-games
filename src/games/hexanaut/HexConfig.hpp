@@ -58,6 +58,30 @@ inline constexpr float kSpeedDuration = 5.0F; // seconds
 inline constexpr float kVisionDuration = 7.0F;
 inline constexpr float kVisionZoom = 0.72F; // camera zoom while Vision is active (zoomed out)
 
+// ---- Shooter item -----------------------------------------------------------
+// A persistent map item that, while it lies inside a player's territory, fires
+// lasers that capture the nearest un-owned/enemy cell one at a time. The closer
+// the frontier, the faster it shoots; past kShooterRange hexes it does nothing,
+// so each shooter blooms a bounded disc of land around itself, slowing as it
+// grows. Owned by whoever owns its cell, so it can be stolen by recapture.
+inline constexpr int kShooterRange = 6;               // max hex distance it can reach
+inline constexpr float kShooterFastInterval = 0.14F;  // s/capture when the target is adjacent
+inline constexpr float kShooterSlowInterval = 0.95F;  // s/capture at the edge of range
+inline constexpr float kShooterLaserLife = 0.4F;      // seconds a fired laser bolt takes to fade out
+
+// Seconds between captures for a target `dist` hexes away (lerps fast->slow over
+// the reach; clamped at the ends). Pure data so the sim stays SDL-free.
+[[nodiscard]] constexpr float shooterShotInterval(int dist) {
+    if (dist <= 1) {
+        return kShooterFastInterval;
+    }
+    if (dist >= kShooterRange) {
+        return kShooterSlowInterval;
+    }
+    const float t = static_cast<float>(dist - 1) / static_cast<float>(kShooterRange - 1);
+    return kShooterFastInterval + ((kShooterSlowInterval - kShooterFastInterval) * t);
+}
+
 // ---- Per-difficulty parameters ----------------------------------------------
 // Lower stepInterval = faster. Harder = bigger map, more & faster bots, more
 // power-ups. powerupInterval == 0 disables power-up spawns for that difficulty.
@@ -68,8 +92,10 @@ struct DifficultyParams {
     BotSkill botSkill;
     float playerStepInterval; // seconds per hex
     float botStepInterval;
-    float powerupInterval; // seconds between spawn attempts (0 = none)
+    float powerupInterval; // seconds between Speed/Vision spawn attempts (0 = none)
     int maxPowerups;
+    float shooterInterval; // seconds between Shooter spawn attempts (0 = none)
+    int maxShooters;       // cap on live shooters on the board
 };
 
 [[nodiscard]] constexpr DifficultyParams paramsFor(int difficultyIndex) {
@@ -82,7 +108,9 @@ struct DifficultyParams {
                 .playerStepInterval = 0.14F,
                 .botStepInterval = 0.17F,
                 .powerupInterval = 0.0F,
-                .maxPowerups = 0};
+                .maxPowerups = 0,
+                .shooterInterval = 7.0F,
+                .maxShooters = 2};
     case 2:
         return {.gridW = 72,
                 .gridH = 72,
@@ -91,7 +119,9 @@ struct DifficultyParams {
                 .playerStepInterval = 0.10F,
                 .botStepInterval = 0.11F,
                 .powerupInterval = 6.0F,
-                .maxPowerups = 4};
+                .maxPowerups = 4,
+                .shooterInterval = 5.0F,
+                .maxShooters = 4};
     default:
         return {.gridW = 64,
                 .gridH = 64,
@@ -100,7 +130,9 @@ struct DifficultyParams {
                 .playerStepInterval = 0.12F,
                 .botStepInterval = 0.14F,
                 .powerupInterval = 9.0F,
-                .maxPowerups = 3};
+                .maxPowerups = 3,
+                .shooterInterval = 6.0F,
+                .maxShooters = 3};
     }
 }
 

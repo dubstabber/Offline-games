@@ -72,6 +72,14 @@ private:
     void updateParticles(float dtSeconds);
     void drawParticles(Canvas& canvas);
     void drawPowerups(Canvas& canvas) const;
+    // Spawn one fading laser bolt per new shooter capture (detected via each
+    // shooter's shotCount), then age and cull the live bolts. Spawns only while
+    // the sim is stepping; keeps fading afterward so bolts finish cleanly.
+    void updateLasers(float dtSeconds);
+    // Laser-shooter items: each live (fading) laser bolt to the cell it just
+    // captured, plus a faceted crystal token (dim grey while un-owned). Tokens are
+    // driven by HexWorld::shooters(); bolts by lasers_; animTime_ bobs the gem.
+    void drawShooters(Canvas& canvas) const;
     void drawAvatars(Canvas& canvas) const;
     void drawHud(Canvas& canvas) const;
     void drawLeaderboard(Canvas& canvas) const;
@@ -107,6 +115,17 @@ private:
         Color color{};
     };
 
+    // A single fired shooter bolt: a world-space ray from the shooter cell to the
+    // cell it captured, in its owner's color, that fades to nothing over `life`.
+    // Decoupled from the shooter once spawned (it is a one-shot muzzle flash).
+    struct Laser {
+        hexanaut::Vec2 from;
+        hexanaut::Vec2 to;
+        hexanaut::PlayerId owner = 0;
+        float age = 0.0F;
+        float life = 0.4F;
+    };
+
     SceneManager& manager_;
     Difficulty difficulty_;
     hexanaut::HexWorld world_;
@@ -115,6 +134,7 @@ private:
     float camX_ = 0.0F;
     float camY_ = 0.0F;
     float zoom_ = 1.0F;
+    float animTime_ = 0.0F; // free-running clock for cosmetic FX (laser pulse, gem bob)
 
     hexanaut::Vec2 aimScreen_; // last pointer position (logical px) used to steer
     bool hasAim_ = false;
@@ -135,6 +155,9 @@ private:
     std::vector<Particle> particles_; // live cut-through sparks
     float fxSpawnAccum_ = 0.0F;       // dt accumulator pacing spark bursts
     std::mt19937 fxRng_;              // visual-only jitter (fixed seed; not gameplay)
+
+    std::vector<Laser> lasers_;            // live (fading) shooter bolts
+    std::vector<std::uint32_t> shotSeen_;  // last-seen shotCount per shooter (parallel to shooters())
 
     Button homeButton_;
     Button retryButton_;

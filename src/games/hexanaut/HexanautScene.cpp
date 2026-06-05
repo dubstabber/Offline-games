@@ -220,6 +220,7 @@ void HexanautScene::handleInput(const PointerEvent& event) {
 // ---- Update -----------------------------------------------------------------
 
 void HexanautScene::update(float dtSeconds) {
+    animTime_ += dtSeconds; // drives cosmetic-only laser/gem animation
     if (phase_ == Phase::Playing) {
         if (hasAim_) {
             const Vec2 aim = screenToWorld(aimScreen_.x, aimScreen_.y);
@@ -240,6 +241,7 @@ void HexanautScene::update(float dtSeconds) {
             enterGameOver();
         }
     }
+    updateLasers(dtSeconds);    // spawn/age shooter bolts (keep fading after game over)
     updateParticles(dtSeconds); // keep advancing/fading even after game over
     updateCamera(dtSeconds);
 }
@@ -400,7 +402,10 @@ void HexanautScene::appendCellPrism(const hexanaut::HexGrid& grid, HexCoord coor
     } else {
         appendHexTop(center, cfg::kGroundInset, 0.0F, pal::kGroundTop, pal::kGroundBottom);
     }
-    if (cell.powerup != 0) {
+    // Speed/Vision render as floating bubbles here; the Shooter is drawn separately
+    // (crystal + laser) from the sim's shooter list, so skip it in this pass.
+    if (cell.powerup != 0 &&
+        cell.powerup != static_cast<std::uint8_t>(hexanaut::PowerUp::Shooter)) {
         powerupDraws_.push_back({.center = center, .type = cell.powerup});
     }
 }
@@ -573,6 +578,98 @@ void HexanautScene::drawPowerups(Canvas& canvas) const {
         canvas.fillCircle(sp.x, sp.y, rad - 3.0F, rgb(248, 248, 252, 235));
         const bool speed = pd.type == static_cast<std::uint8_t>(hexanaut::PowerUp::Speed);
         canvas.emojiCentered(speed ? kBolt : kEye, sp.x, sp.y, rad * 1.4F);
+    }
+}
+
+void HexanautScene::updateLasers(float dtSeconds) {
+    constexpr std::size_t kMaxLasers = 48; // safety cap; a handful are live at once
+    const std::vector<hexanaut::Shooter>& shooters = world_.shooters();
+    if (shotSeen_.size() < shooters.size()) {
+        shotSeen_.resize(shooters.size(), 0); // new shooters start un-fired (shotCount 0)
+    }
+    for (std::size_t i = 0; i < shooters.size(); ++i) {
+        const hexanaut::Shooter& s = shooters.at(i);
+        if (s.shotCount == shotSeen_.at(i)) {
+            continue; // no new capture since last frame
+        }
+        shotSeen_.at(i) = s.shotCount;
+        const hexanaut::PlayerId owner = world_.ownerAt(s.cell);
+        if (owner != hexanaut::kNeutral && lasers_.size() < kMaxLasers) {
+            lasers_.push_back({.from = hexanaut::axialToWorld(s.cell, cfg::kHexSize),
+                               .to = hexanaut::axialToWorld(s.target, cfg::kHexSize),
+                               .owner = owner,
+                               .age = 0.0F,
+                               .life = cfg::kShooterLaserLife});
+        }
+    }
+    for (Laser& l : lasers_) {
+        l.age += dtSeconds;
+    }
+    std::erase_if(lasers_, [](const Laser& l) { return l.age >= l.life; });
+}
+
+void HexanautScene::drawShooters(Canvas& canvas) const {
+    constexpr float kS = cfg::kHexSize;
+
+    // ---- Fired laser bolts: each fades (lerps) to nothing over its life ---------
+    for (const Laser& l : lasers_) {
+        const float fade = std::clamp(1.0F - (l.age / l.life), 0.0F, 1.0F);
+        const Color col = pal::topColor(l.owner);
+        const ScreenPos a = toScreen(l.from, cfg::kPrismLift + 22.0F); // muzzle (the gem)
+        const ScreenPos b = toScreen(l.to, cfg::kPrismLift + 4.0F);    // the cell it hit
+        const float beamW = std::max(3.0F, kS * zoom_ * 0.2F);
+        const auto alpha = [&](float base) { return static_cast<std::uint8_t>(base * fade); };
+        canvas.line(a.x, a.y, b.x, b.y, beamW * 2.4F, pal::withAlpha(col, alpha(70.0F)));  // glow
+        canvas.line(a.x, a.y, b.x, b.y, beamW, pal::withAlpha(col, alpha(200.0F)));        // body
+        canvas.line(a.x, a.y, b.x, b.y, std::max(1.5F, beamW * 0.4F),
+                    pal::withAlpha(pal::lighten(col, 0.6F), alpha(240.0F)));               // hot core
+        // Impact flash blooms outward a touch as it dies.
+        const float flashR = beamW * (1.5F + ((1.0F - fade) * 1.4F));
+        canvas.fillCircle(b.x, b.y, flashR, pal::withAlpha(pal::lighten(col, 0.3F), alpha(190.0F)));
+        canvas.fillCircle(b.x, b.y, flashR * 0.45F, pal::withAlpha(colors::white, alpha(200.0F)));
+    }
+
+    // ---- Crystal tokens ---------------------------------------------------------
+    for (const hexanaut::Shooter& s : world_.shooters()) {
+        const Vec2 cellW = hexanaut::axialToWorld(s.cell, kS);
+        const hexanaut::PlayerId owner = world_.ownerAt(s.cell);
+        const bool active = owner != hexanaut::kNeutral;
+        const Color col = active ? pal::topColor(owner) : rgb(120, 126, 140);
+
+        // Crystal floats above its cell with a gentle, per-cell-phased bob.
+        const float bob =
+            std::sin((animTime_ * 3.0F) + (static_cast<float>(s.cell.q) * 0.7F)) * 3.0F;
+        const ScreenPos gp = toScreen(cellW, cfg::kPrismLift + 20.0F + bob);
+        const float rad = std::max(11.0F, kS * zoom_ * 0.5F);
+
+        // ---- Crystal token ------------------------------------------------------
+        const ScreenPos shadow = toScreen(cellW, cfg::kPrismLift);
+        canvas.fillCircle(shadow.x, shadow.y + (rad * 0.2F), rad * 0.85F, rgb(0, 0, 0, 80));
+        if (active) {
+            canvas.fillCircle(gp.x, gp.y, rad * 1.5F, pal::withAlpha(col, 45)); // glow halo
+        }
+        // Faceted gem: a 4-corner diamond gradient-shaded top(lit)->bottom(shadow),
+        // tinted to the owner color (grey when nobody owns it).
+        const Color top = active ? pal::lighten(col, 0.45F) : rgb(150, 156, 168);
+        const Color bottom = active ? pal::darken(col, 0.45F) : rgb(72, 76, 86);
+        const Color mid = pal::mix(top, bottom, 0.5F);
+        const std::array<Canvas::Vertex, 4> gem{{
+            {.x = gp.x, .y = gp.y - rad, .color = top},
+            {.x = gp.x + (rad * 0.72F), .y = gp.y, .color = mid},
+            {.x = gp.x, .y = gp.y + (rad * 0.85F), .color = bottom},
+            {.x = gp.x - (rad * 0.72F), .y = gp.y, .color = mid},
+        }};
+        canvas.fillConvexPolygon(gem);
+        // Bright rim edges + a glowing core facet.
+        const Color rim = pal::withAlpha(active ? pal::lighten(col, 0.25F) : rgb(196, 200, 210), 205);
+        const float rimW = std::max(1.5F, kS * zoom_ * 0.05F);
+        for (std::size_t k = 0; k < 4; ++k) {
+            const Canvas::Vertex& a = gem.at(k);
+            const Canvas::Vertex& b = gem.at((k + 1) % 4);
+            canvas.line(a.x, a.y, b.x, b.y, rimW, rim);
+        }
+        canvas.fillCircle(gp.x, gp.y - (rad * 0.05F), rad * 0.26F,
+                          pal::withAlpha(pal::lighten(col, 0.55F), active ? 235 : 150));
     }
 }
 
@@ -827,6 +924,7 @@ void HexanautScene::render(Canvas& canvas) {
     drawField(canvas);
     drawTrailOutlines(canvas);
     drawTrails(canvas);
+    drawShooters(canvas);
     drawPowerups(canvas);
     drawAvatars(canvas);
     drawParticles(canvas);

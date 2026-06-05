@@ -50,6 +50,19 @@ struct Player {
 // only renders this and feeds the human's steering angle. Determinism comes from
 // a single seeded RNG and id-ordered resolution, so (difficulty, seed, inputs)
 // replays identically.
+// A persistent map shooter. It sits on a fixed `cell`; while that cell lies in
+// some player's territory the shooter captures the nearest un-owned/enemy cell
+// for that owner, one at a time, at a distance-scaled rate. Each capture bumps
+// `shotCount` and records `target`, so the Scene can fire a single fading laser
+// per shot (the beam is a transient muzzle flash, not a continuous ray). The
+// shooter is owned by whoever owns `cell`, so recapturing the cell steals it.
+struct Shooter {
+    HexCoord cell{};
+    HexCoord target{};           // the most recent cell it fired at
+    float cooldown = 0.0F;       // seconds until the next capture
+    std::uint32_t shotCount = 0; // bumped on each capture -> one laser bolt per bump
+};
+
 class HexWorld {
 public:
     HexWorld(int difficultyIndex, std::uint32_t seed);
@@ -64,6 +77,7 @@ public:
 
     [[nodiscard]] const Player& player() const { return players_.front(); }
     [[nodiscard]] const std::vector<Player>& players() const { return players_; }
+    [[nodiscard]] const std::vector<Shooter>& shooters() const { return shooters_; }
     [[nodiscard]] const HexGrid& grid() const { return grid_; }
     [[nodiscard]] bool playerAlive() const { return players_.front().alive; }
     [[nodiscard]] int totalCells() const { return totalCells_; }
@@ -98,6 +112,17 @@ public:
     // heading/desiredDir, running the real collision + capture path. Does NOT
     // respawn dead bots, so controlled collision scenarios stay set up.
     void advanceCellForTest();
+    // Drop a shooter on `c` (and register it) so the laser-capture mechanic can be
+    // driven in isolation; advanceShootersForTest runs N shooter ticks only.
+    void setShooterForTest(HexCoord c) {
+        grid_.at(c).powerup = static_cast<std::uint8_t>(PowerUp::Shooter);
+        shooters_.push_back(Shooter{.cell = c});
+    }
+    void advanceShootersForTest(int ticks) {
+        for (int i = 0; i < ticks; ++i) {
+            updateShooters();
+        }
+    }
 
 private:
     void spawnHome(Player& p, HexCoord center, int radius);
@@ -112,6 +137,15 @@ private:
     void decideBots();
     void decayEffects();
     void maybeSpawnPowerup();
+    void maybeSpawnShooter();
+    // Advance every shooter one tick: capture the nearest in-range cell for its
+    // current owner at a distance-scaled rate, and refresh its firing/target so
+    // the Scene can draw the beam. Owner-neutral shooters idle.
+    void updateShooters();
+    // Nearest in-bounds cell not owned by `owner`, within kShooterRange of `from`,
+    // via bounded BFS. Returns false if none in range. `from` must be owner-owned.
+    [[nodiscard]] bool nearestShooterTarget(HexCoord from, PlayerId owner, HexCoord& out,
+                                            int& outDist) const;
     static void applyPowerup(Player& p, PowerUp type);
     [[nodiscard]] HexDir deflectHeading(HexCoord cell, HexDir heading) const;
     // Steer `angle` to the nearest heading whose `probe`-long forward step stays
@@ -142,6 +176,7 @@ private:
     HexGrid grid_;
     std::vector<Player> players_;
     std::vector<std::unique_ptr<BotController>> bots_; // parallel to players_; null for the human
+    std::vector<Shooter> shooters_;                    // persistent laser items on the board
     std::mt19937 rng_;
     int totalCells_;
     std::vector<std::uint8_t> visited_; // flood-fill scratch, sized to the grid
@@ -150,6 +185,10 @@ private:
     float powerupInterval_ = 0.0F;
     int maxPowerups_ = 0;
     int activePowerups_ = 0;
+
+    float shooterAccum_ = 0.0F;
+    float shooterInterval_ = 0.0F;
+    int maxShooters_ = 0;
 };
 
 } // namespace og::hexanaut

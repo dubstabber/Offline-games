@@ -18,8 +18,12 @@ using PlayerId = std::uint8_t;
 inline constexpr PlayerId kNeutral = 0xFF;
 inline constexpr PlayerId kNoTrail = 0xFF;
 
-// Collectible map items. Stored in Cell::powerup as the underlying byte (0 = none).
-enum class PowerUp : std::uint8_t { None, Speed, Vision };
+// Map items. Stored in Cell::powerup as the underlying byte (0 = none). Speed and
+// Vision are collectible buffs (picked up by stepping on them). Shooter is a
+// persistent, territory-bound item: it is never picked up — it acts for whoever
+// currently owns the cell it sits on, capturing nearby land with lasers, and can
+// be stolen by capturing that cell (see HexWorld::updateShooters).
+enum class PowerUp : std::uint8_t { None, Speed, Vision, Shooter };
 
 struct Vec2 {
     float x = 0.0F;

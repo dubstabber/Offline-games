@@ -34,6 +34,8 @@ HexWorld::HexWorld(int difficultyIndex, std::uint32_t seed)
     visited_.assign(static_cast<std::size_t>(totalCells_), 0);
     powerupInterval_ = params.powerupInterval;
     maxPowerups_ = params.maxPowerups;
+    shooterInterval_ = params.shooterInterval;
+    maxShooters_ = params.maxShooters;
 
     Player human;
     human.id = 0;
@@ -132,7 +134,9 @@ void HexWorld::step() {
     decideBots();
     decayEffects();
     maybeSpawnPowerup();
+    maybeSpawnShooter();
     resolveTick(integrateMotion(), true);
+    updateShooters(); // capture with lasers after movement/territory settle
 }
 
 void HexWorld::decayEffects() {
@@ -188,8 +192,94 @@ void HexWorld::applyPowerup(Player& p, PowerUp type) {
     case PowerUp::Vision:
         p.visionTimer = config::kVisionDuration;
         break;
+    case PowerUp::Shooter: // not a collectible buff; handled by updateShooters
     case PowerUp::None:
         break;
+    }
+}
+
+void HexWorld::maybeSpawnShooter() {
+    if (shooterInterval_ <= 0.0F) {
+        return;
+    }
+    shooterAccum_ += config::kFixedDt;
+    if (shooterAccum_ < shooterInterval_) {
+        return;
+    }
+    shooterAccum_ = 0.0F;
+    const int liveShooters = static_cast<int>(shooters_.size());
+    if (liveShooters >= maxShooters_) {
+        return;
+    }
+    // Drop it on open ground: an un-captured shooter does nothing, so it sits there
+    // as a contestable prize until someone's territory reaches and claims it.
+    std::uniform_int_distribution<int> qd(1, grid_.width() - 2);
+    std::uniform_int_distribution<int> rd(1, grid_.height() - 2);
+    for (int attempt = 0; attempt < 60; ++attempt) {
+        const HexCoord c{qd(rng_), rd(rng_)};
+        Cell& cell = grid_.at(c);
+        if (cell.owner == kNeutral && cell.trailOwner == kNoTrail && cell.powerup == 0) {
+            cell.powerup = static_cast<std::uint8_t>(PowerUp::Shooter);
+            shooters_.push_back(Shooter{.cell = c});
+            return;
+        }
+    }
+}
+
+bool HexWorld::nearestShooterTarget(HexCoord from, PlayerId owner, HexCoord& out,
+                                    int& outDist) const {
+    // Bounded BFS outward from the (owner-owned) shooter cell; the first cell whose
+    // owner differs is the nearest target. Frontier cells of `owner`'s blob are
+    // reached at the distance to that frontier, so this naturally slows as the
+    // claimed disc grows and stops once the frontier passes kShooterRange.
+    std::unordered_set<int> seen;
+    std::deque<std::pair<HexCoord, int>> queue;
+    seen.insert(grid_.index(from));
+    queue.emplace_back(from, 0);
+    while (!queue.empty()) {
+        const auto [c, dist] = queue.front();
+        queue.pop_front();
+        if (dist >= config::kShooterRange) {
+            continue;
+        }
+        for (int d = 0; d < 6; ++d) {
+            const HexCoord nb = neighbor(c, static_cast<HexDir>(d));
+            if (!grid_.contains(nb) || seen.contains(grid_.index(nb))) {
+                continue;
+            }
+            if (grid_.at(nb).owner != owner) {
+                out = nb;
+                outDist = dist + 1;
+                return true;
+            }
+            seen.insert(grid_.index(nb));
+            queue.emplace_back(nb, dist + 1);
+        }
+    }
+    return false;
+}
+
+void HexWorld::updateShooters() {
+    for (Shooter& s : shooters_) {
+        const PlayerId owner = grid_.at(s.cell).owner;
+        if (owner == kNeutral) {
+            // Un-captured (or just lost to a death): idle, and ready to fire the
+            // instant someone claims its cell.
+            s.cooldown = 0.0F;
+            continue;
+        }
+        HexCoord target{};
+        int dist = 0;
+        if (!nearestShooterTarget(s.cell, owner, target, dist)) {
+            continue; // owner has claimed everything within reach
+        }
+        s.cooldown -= config::kFixedDt;
+        if (s.cooldown <= 0.0F) {
+            setOwner(target, owner); // annex one cell (neutral or stolen from a rival)
+            s.target = target;
+            s.shotCount += 1; // signal a shot -> the Scene spawns a single fading laser
+            s.cooldown = config::shooterShotInterval(dist);
+        }
     }
 }
 
@@ -357,7 +447,9 @@ void HexWorld::commitMoves(const std::vector<Move>& moves, const std::vector<cha
             tc.trailOwner = p.id;
             p.trail.push_back(p.cell);
         }
-        if (tc.powerup != 0) {
+        // Speed/Vision are collected on contact; the Shooter is a fixed item that
+        // is never picked up (it acts for whoever owns its cell), so step over it.
+        if (tc.powerup != 0 && tc.powerup != static_cast<std::uint8_t>(PowerUp::Shooter)) {
             applyPowerup(p, static_cast<PowerUp>(tc.powerup));
             tc.powerup = 0;
             if (activePowerups_ > 0) {

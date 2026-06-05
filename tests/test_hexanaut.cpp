@@ -346,6 +346,40 @@ void testHeadToHead() {
     assert(!world.players()[1].alive);
 }
 
+// A captured shooter blooms its owner's territory outward, capturing the nearest
+// un-owned cells one at a time until the whole disc within range is claimed.
+void testShooterCaptures() {
+    HexWorld world(0, 7);
+    soloHuman(world);
+    const HexCoord s{20, 20}; // far from the central home; surrounded by neutral ground
+    world.setOwnerForTest(s, 0);
+    for (int d = 0; d < 6; ++d) {
+        assert(world.ownerAt(neighbor(s, static_cast<HexDir>(d))) != 0); // neutral to begin
+    }
+    const int before = world.territoryCount(0);
+
+    world.setShooterForTest(s);
+    world.advanceShootersForTest(3000); // many capture cycles (slows as the disc grows)
+
+    // The full first ring is claimed, and the shooter has annexed a sizeable disc.
+    for (int d = 0; d < 6; ++d) {
+        assert(world.ownerAt(neighbor(s, static_cast<HexDir>(d))) == 0);
+    }
+    assert(world.territoryCount(0) >= before + 18);
+}
+
+// An un-captured shooter (its cell is neutral) does nothing — no captures occur.
+void testShooterInertWhenUnowned() {
+    HexWorld world(0, 7);
+    soloHuman(world);
+    const HexCoord s{30, 30};
+    assert(world.ownerAt(s) == og::hexanaut::kNeutral);
+    const int before = world.territoryCount(0);
+    world.setShooterForTest(s);
+    world.advanceShootersForTest(500);
+    assert(world.territoryCount(0) == before); // neutral shooter never fires
+}
+
 // Stepping onto a Speed power-up lowers stepInterval and arms its timer; a Vision
 // power-up arms the vision timer.
 void testPowerupPickup() {
@@ -390,6 +424,8 @@ int main() {
     testDeterminism();
     testTrailCutDeath();
     testTrailCutCapturesTerritory();
+    testShooterCaptures();
+    testShooterInertWhenUnowned();
     testHeadToHead();
     testPowerupPickup();
     std::puts("All Hexanaut tests passed.");
