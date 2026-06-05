@@ -199,10 +199,17 @@ void HexWorld::advanceCellForTest() {
 
 void HexWorld::resolveTick(const std::vector<Move>& moves, bool allowRespawn) {
     std::vector<char> dead(players_.size(), 0);
-    detectDeaths(moves, dead);
+    std::vector<PlayerId> killer(players_.size(), kNeutral);
+    detectDeaths(moves, dead, killer);
     for (std::size_t i = 0; i < players_.size(); ++i) {
         if (dead.at(i) != 0) {
-            killPlayer(players_.at(i).id);
+            // A killer that itself fell this tick (mutual cut) can't inherit land,
+            // so the victim's territory reverts to neutral in that case.
+            PlayerId k = killer.at(i);
+            if (k != kNeutral && dead.at(static_cast<std::size_t>(k)) != 0) {
+                k = kNeutral;
+            }
+            killPlayer(players_.at(i).id, k);
         }
     }
     commitMoves(moves, dead);
@@ -284,7 +291,8 @@ float HexWorld::deflectAngle(Vec2 pos, float angle, float probe) const {
     return angle; // fully boxed in (shouldn't happen on a real board)
 }
 
-void HexWorld::detectDeaths(const std::vector<Move>& moves, std::vector<char>& dead) {
+void HexWorld::detectDeaths(const std::vector<Move>& moves, std::vector<char>& dead,
+                            std::vector<PlayerId>& killer) {
     const std::size_t n = players_.size();
     // Trail cuts: crossing onto a trail kills its owner (your own trail kills you).
     for (std::size_t i = 0; i < n; ++i) {
@@ -301,11 +309,12 @@ void HexWorld::detectDeaths(const std::vector<Move>& moves, std::vector<char>& d
             // real self-cross; only crossing older trail is fatal.
             const std::vector<HexCoord>& trail = players_.at(i).trail;
             if (trail.empty() || target != trail.back()) {
-                dead.at(i) = 1;
+                dead.at(i) = 1; // self-cut: no aggressor, killer stays kNeutral
             }
         } else {
             dead.at(static_cast<std::size_t>(trailOwner)) = 1;
-            players_.at(i).kills += 1; // credit the cutter
+            killer.at(static_cast<std::size_t>(trailOwner)) = players_.at(i).id; // the cutter
+            players_.at(i).kills += 1;                                           // credit the cutter
         }
     }
     // Head-to-head: two avatars crossing into the same cell this tick both fall.
@@ -525,7 +534,7 @@ void HexWorld::closeTrailAndCapture(Player& p) {
     p.trail.clear();
 }
 
-void HexWorld::killPlayer(PlayerId id) {
+void HexWorld::killPlayer(PlayerId id, PlayerId killer) {
     Player& d = players_.at(static_cast<std::size_t>(id));
     if (!d.alive) {
         return;
@@ -534,12 +543,18 @@ void HexWorld::killPlayer(PlayerId id) {
         grid_.at(c).trailOwner = kNoTrail;
     }
     d.trail.clear();
-    // Free the dead player's territory back to neutral (faithful to the original;
-    // keeps the map churning). Infrequent, so an O(cells) sweep is fine.
+    // The aggressor that cut this player down annexes its whole territory (the
+    // reward for a kill); a death with no surviving killer — self-cut or
+    // head-to-head — instead frees the land to neutral to keep the map churning.
+    // Infrequent, so an O(cells) sweep is fine.
+    const bool annex = killer != kNeutral && killer != id;
     for (Cell& cell : grid_.cells()) {
         if (cell.owner == id) {
-            cell.owner = kNeutral;
+            cell.owner = annex ? killer : kNeutral;
         }
+    }
+    if (annex) {
+        players_.at(static_cast<std::size_t>(killer)).territoryCount += d.territoryCount;
     }
     d.territoryCount = 0;
     d.alive = false;

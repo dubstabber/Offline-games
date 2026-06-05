@@ -291,6 +291,45 @@ void testTrailCutDeath() {
     assert(world.trailOwnerAt({7, 5}) == og::hexanaut::kNoTrail);
 }
 
+// Cutting a rival's trail hands the cutter the victim's whole territory rather
+// than freeing it to neutral.
+void testTrailCutCapturesTerritory() {
+    HexWorld world(0, 123);
+    const int n = static_cast<int>(world.players().size());
+    for (int id = 2; id < n; ++id) {
+        world.setAliveForTest(static_cast<og::hexanaut::PlayerId>(id), false);
+    }
+    for (const HexCoord c :
+         {HexCoord{5, 5}, HexCoord{6, 5}, HexCoord{7, 5}, HexCoord{8, 5}, HexCoord{6, 4}}) {
+        world.setOwnerForTest(c, og::hexanaut::kNeutral);
+    }
+
+    // Lay victim (id 1) trail while the human is parked.
+    world.setAliveForTest(0, false);
+    world.placePlayerForTest(1, {5, 5}, HexDir::SE);
+    world.setDesiredDirForTest(1, HexDir::SE);
+    world.advanceCellForTest(); // 1 -> (6,5)
+    world.advanceCellForTest(); // 1 -> (7,5)
+
+    const int before0 = world.territoryCount(0);
+    const int before1 = world.territoryCount(1);
+    assert(before1 > 0);
+    const HexCoord victimHome = world.players()[1].home;
+    assert(world.ownerAt(victimHome) == 1);
+
+    // Human cuts the trail at (6,5) -> victim dies and the human inherits its land.
+    world.setAliveForTest(0, true);
+    world.placePlayerForTest(0, {6, 4}, HexDir::S);
+    world.setDesiredDirForTest(0, HexDir::S);
+    world.setDesiredDirForTest(1, HexDir::SE);
+    world.advanceCellForTest();
+
+    assert(!world.players()[1].alive);
+    assert(world.territoryCount(1) == 0);
+    assert(world.territoryCount(0) == before0 + before1); // cutter annexed the territory
+    assert(world.ownerAt(victimHome) == 0);               // victim's cells are now the cutter's
+}
+
 // Two players moving into the same cell on the same tick both fall.
 void testHeadToHead() {
     HexWorld world(0, 55);
@@ -350,6 +389,7 @@ int main() {
     testCaptureConservesCount();
     testDeterminism();
     testTrailCutDeath();
+    testTrailCutCapturesTerritory();
     testHeadToHead();
     testPowerupPickup();
     std::puts("All Hexanaut tests passed.");

@@ -103,7 +103,10 @@ private:
     void spawnHome(Player& p, HexCoord center, int radius);
     void setOwner(HexCoord c, PlayerId newOwner);
     void closeTrailAndCapture(Player& p);
-    void killPlayer(PlayerId id);
+    // `killer` is the player whose cut/collision felled `id`, or kNeutral when
+    // there is no surviving aggressor (self-cut, head-to-head). A real killer
+    // inherits the victim's territory; otherwise it is freed to neutral.
+    void killPlayer(PlayerId id, PlayerId killer);
     void respawnBot(PlayerId id);
     [[nodiscard]] HexCoord findSpawn(int clearRadius);
     void decideBots();
@@ -128,7 +131,10 @@ private:
     };
     [[nodiscard]] std::vector<Move> integrateMotion(); // production: continuous glide
     [[nodiscard]] std::vector<Move> forcedCellMoves(); // tests: force one hex step
-    void detectDeaths(const std::vector<Move>& moves, std::vector<char>& dead);
+    // Fills `dead` with who fell this tick and `killer` with the player that
+    // felled each of them (kNeutral = none/mutual), so a cutter can inherit land.
+    void detectDeaths(const std::vector<Move>& moves, std::vector<char>& dead,
+                      std::vector<PlayerId>& killer);
     void commitMoves(const std::vector<Move>& moves, const std::vector<char>& dead);
     void respawnDeadBots();
     void resolveTick(const std::vector<Move>& moves, bool allowRespawn);
