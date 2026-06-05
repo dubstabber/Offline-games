@@ -34,8 +34,6 @@ HexWorld::HexWorld(int difficultyIndex, std::uint32_t seed)
     visited_.assign(static_cast<std::size_t>(totalCells_), 0);
     powerupInterval_ = params.powerupInterval;
     maxPowerups_ = params.maxPowerups;
-    shooterInterval_ = params.shooterInterval;
-    maxShooters_ = params.maxShooters;
 
     Player human;
     human.id = 0;
@@ -60,6 +58,8 @@ HexWorld::HexWorld(int difficultyIndex, std::uint32_t seed)
         bots_.push_back(makeBot(params.botSkill, static_cast<std::uint32_t>(rng_())));
         spawnHome(players_.back(), findSpawn(config::kHomeRadius + 1), config::kHomeRadius);
     }
+
+    generateShooters(params.shooterCount); // static items, placed once after all homes
 }
 
 void HexWorld::spawnHome(Player& p, HexCoord center, int radius) {
@@ -134,7 +134,6 @@ void HexWorld::step() {
     decideBots();
     decayEffects();
     maybeSpawnPowerup();
-    maybeSpawnShooter();
     resolveTick(integrateMotion(), true);
     updateShooters(); // capture with lasers after movement/territory settle
 }
@@ -198,30 +197,21 @@ void HexWorld::applyPowerup(Player& p, PowerUp type) {
     }
 }
 
-void HexWorld::maybeSpawnShooter() {
-    if (shooterInterval_ <= 0.0F) {
-        return;
-    }
-    shooterAccum_ += config::kFixedDt;
-    if (shooterAccum_ < shooterInterval_) {
-        return;
-    }
-    shooterAccum_ = 0.0F;
-    const int liveShooters = static_cast<int>(shooters_.size());
-    if (liveShooters >= maxShooters_) {
-        return;
-    }
-    // Drop it on open ground: an un-captured shooter does nothing, so it sits there
-    // as a contestable prize until someone's territory reaches and claims it.
-    std::uniform_int_distribution<int> qd(1, grid_.width() - 2);
-    std::uniform_int_distribution<int> rd(1, grid_.height() - 2);
-    for (int attempt = 0; attempt < 60; ++attempt) {
-        const HexCoord c{qd(rng_), rd(rng_)};
-        Cell& cell = grid_.at(c);
-        if (cell.owner == kNeutral && cell.trailOwner == kNoTrail && cell.powerup == 0) {
-            cell.powerup = static_cast<std::uint8_t>(PowerUp::Shooter);
-            shooters_.push_back(Shooter{.cell = c});
-            return;
+void HexWorld::generateShooters(int count) {
+    // All shooters are placed up front on open ground (an un-captured shooter does
+    // nothing, so each sits as a contestable prize until a player's territory
+    // reaches it). Static for the whole match — they never move or respawn.
+    std::uniform_int_distribution<int> qd(2, grid_.width() - 3);
+    std::uniform_int_distribution<int> rd(2, grid_.height() - 3);
+    for (int i = 0; i < count; ++i) {
+        for (int attempt = 0; attempt < 80; ++attempt) {
+            const HexCoord c{qd(rng_), rd(rng_)};
+            Cell& cell = grid_.at(c);
+            if (cell.owner == kNeutral && cell.trailOwner == kNoTrail && cell.powerup == 0) {
+                cell.powerup = static_cast<std::uint8_t>(PowerUp::Shooter);
+                shooters_.push_back(Shooter{.cell = c});
+                break;
+            }
         }
     }
 }

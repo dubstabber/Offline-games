@@ -1,9 +1,11 @@
+#include "games/hexanaut/HexConfig.hpp"
 #include "games/hexanaut/HexGrid.hpp"
 #include "games/hexanaut/HexTypes.hpp"
 #include "games/hexanaut/HexWorld.hpp"
 
 #include <cassert>
 #include <cstdio>
+#include <vector>
 
 namespace {
 
@@ -368,6 +370,28 @@ void testShooterCaptures() {
     assert(world.territoryCount(0) >= before + 18);
 }
 
+// Shooters are a fixed set placed once at construction (on open ground), and they
+// never move or respawn for the rest of the match.
+void testStaticShootersAtStart() {
+    HexWorld world(0, 99);
+    const std::size_t n = world.shooters().size();
+    assert(n == static_cast<std::size_t>(og::hexanaut::config::paramsFor(0).shooterCount));
+    std::vector<HexCoord> cells;
+    for (const auto& s : world.shooters()) {
+        assert(world.grid().contains(s.cell));
+        assert(world.ownerAt(s.cell) == og::hexanaut::kNeutral); // open ground at start
+        assert(world.trailOwnerAt(s.cell) == og::hexanaut::kNoTrail);
+        cells.push_back(s.cell);
+    }
+    for (int k = 0; k < 200; ++k) {
+        world.step();
+    }
+    assert(world.shooters().size() == n); // no respawns — the count is fixed
+    for (std::size_t i = 0; i < n; ++i) {
+        assert(world.shooters()[i].cell == cells.at(i)); // positions never move
+    }
+}
+
 // An un-captured shooter (its cell is neutral) does nothing — no captures occur.
 void testShooterInertWhenUnowned() {
     HexWorld world(0, 7);
@@ -425,6 +449,7 @@ int main() {
     testTrailCutDeath();
     testTrailCutCapturesTerritory();
     testShooterCaptures();
+    testStaticShootersAtStart();
     testShooterInertWhenUnowned();
     testHeadToHead();
     testPowerupPickup();

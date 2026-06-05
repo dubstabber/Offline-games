@@ -137,7 +137,9 @@ private:
     void decideBots();
     void decayEffects();
     void maybeSpawnPowerup();
-    void maybeSpawnShooter();
+    // Place all `count` shooter items once at construction: static map prizes that
+    // never move or respawn, shown on the minimap and contested via territory.
+    void generateShooters(int count);
     // Advance every shooter one tick: capture the nearest in-range cell for its
     // current owner at a distance-scaled rate, and refresh its firing/target so
     // the Scene can draw the beam. Owner-neutral shooters idle.
@@ -185,10 +187,6 @@ private:
     float powerupInterval_ = 0.0F;
     int maxPowerups_ = 0;
     int activePowerups_ = 0;
-
-    float shooterAccum_ = 0.0F;
-    float shooterInterval_ = 0.0F;
-    int maxShooters_ = 0;
 };
 
 } // namespace og::hexanaut

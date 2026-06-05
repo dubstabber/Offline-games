@@ -887,6 +887,31 @@ void HexanautScene::drawMinimap(Canvas& canvas) {
     }
     canvas.fillMesh(meshVerts_, meshIdx_);
 
+    // Static shooter items: a small dark tile + magenta crystal (the in-game icon),
+    // pinned at fixed cells. The border tints to the current owner (grey while
+    // un-claimed) so the minimap shows where every item is and who holds it.
+    for (const hexanaut::Shooter& s : world_.shooters()) {
+        const float ix = boxX + ((static_cast<float>(s.cell.q) + 0.5F) * cw);
+        const float iy = boxY + ((static_cast<float>(s.cell.r) + 0.5F) * ch);
+        const hexanaut::PlayerId owner = world_.ownerAt(s.cell);
+        constexpr float kIcon = 6.0F; // tile half-size
+        const Color border =
+            owner == hexanaut::kNeutral ? rgb(150, 154, 164) : pal::topColor(owner);
+        canvas.fillRoundedRect(ix - kIcon - 1.5F, iy - kIcon - 1.5F, (kIcon + 1.5F) * 2.0F,
+                               (kIcon + 1.5F) * 2.0F, 3.0F, border);
+        canvas.fillRoundedRect(ix - kIcon, iy - kIcon, kIcon * 2.0F, kIcon * 2.0F, 2.5F,
+                               rgb(18, 20, 28));
+        const Color gem = rgb(232, 70, 200);
+        const std::array<Canvas::Vertex, 4> crystal{{
+            {.x = ix, .y = iy - (kIcon * 0.62F), .color = pal::lighten(gem, 0.35F)},
+            {.x = ix + (kIcon * 0.5F), .y = iy, .color = gem},
+            {.x = ix, .y = iy + (kIcon * 0.62F), .color = pal::darken(gem, 0.4F)},
+            {.x = ix - (kIcon * 0.5F), .y = iy, .color = gem},
+        }};
+        canvas.fillConvexPolygon(crystal);
+        canvas.fillCircle(ix, iy, kIcon * 0.17F, pal::lighten(gem, 0.5F)); // core glint
+    }
+
     for (const Player& p : world_.players()) {
         if (!p.alive) {
             continue;

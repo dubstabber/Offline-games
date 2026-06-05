@@ -94,8 +94,7 @@ struct DifficultyParams {
     float botStepInterval;
     float powerupInterval; // seconds between Speed/Vision spawn attempts (0 = none)
     int maxPowerups;
-    float shooterInterval; // seconds between Shooter spawn attempts (0 = none)
-    int maxShooters;       // cap on live shooters on the board
+    int shooterCount;      // static Shooter items placed once at game start (never respawn)
 };
 
 [[nodiscard]] constexpr DifficultyParams paramsFor(int difficultyIndex) {
@@ -109,8 +108,7 @@ struct DifficultyParams {
                 .botStepInterval = 0.17F,
                 .powerupInterval = 0.0F,
                 .maxPowerups = 0,
-                .shooterInterval = 7.0F,
-                .maxShooters = 2};
+                .shooterCount = 4};
     case 2:
         return {.gridW = 72,
                 .gridH = 72,
@@ -120,8 +118,7 @@ struct DifficultyParams {
                 .botStepInterval = 0.11F,
                 .powerupInterval = 6.0F,
                 .maxPowerups = 4,
-                .shooterInterval = 5.0F,
-                .maxShooters = 4};
+                .shooterCount = 8};
     default:
         return {.gridW = 64,
                 .gridH = 64,
@@ -131,8 +128,7 @@ struct DifficultyParams {
                 .botStepInterval = 0.14F,
                 .powerupInterval = 9.0F,
                 .maxPowerups = 3,
-                .shooterInterval = 6.0F,
-                .maxShooters = 3};
+                .shooterCount = 6};
     }
 }
 
