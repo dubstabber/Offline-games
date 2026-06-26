@@ -12,8 +12,8 @@ namespace og::hexanaut {
 // v1 bot: leave home and carve a rough loop by running short straight legs with a
 // fixed turn bias, then dive back to its own territory to capture the enclosed
 // area. It avoids stepping on its own trail and bails home early when a rival gets
-// close. Plays only off HexWorldView, so a stronger SmartBot can replace it with
-// zero engine change (see the plan's Phase E).
+// close. Plays only off HexWorldView, so stronger bots can share the same pure
+// simulation API without touching rendering or SDL-facing code.
 class BasicBot : public BotController {
 public:
     explicit BasicBot(std::uint32_t seed);

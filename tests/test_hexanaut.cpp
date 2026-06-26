@@ -1,27 +1,36 @@
+#include "games/hexanaut/HexBots.hpp"
 #include "games/hexanaut/HexConfig.hpp"
 #include "games/hexanaut/HexGrid.hpp"
 #include "games/hexanaut/HexTypes.hpp"
 #include "games/hexanaut/HexWorld.hpp"
 
 #include <cassert>
+#include <cstdint>
 #include <cstdio>
 #include <vector>
 
 namespace {
 
 using og::hexanaut::axialToWorld;
+using og::hexanaut::BotSkill;
 using og::hexanaut::dirAngle;
 using og::hexanaut::HexCoord;
 using og::hexanaut::HexDir;
 using og::hexanaut::hexDistance;
 using og::hexanaut::HexGrid;
 using og::hexanaut::HexWorld;
+using og::hexanaut::HexWorldView;
+using og::hexanaut::makeBot;
 using og::hexanaut::neighbor;
 using og::hexanaut::opposite;
 using og::hexanaut::PlayerId;
 using og::hexanaut::quantizeToHexDir;
 using og::hexanaut::Vec2;
 using og::hexanaut::worldToAxial;
+
+constexpr HexCoord hc(int q, int r) {
+    return {.q = q, .r = r};
+}
 
 // Kill every bot so a free-movement test can drive player 0 in isolation.
 void soloHuman(HexWorld& world) {
@@ -41,9 +50,19 @@ HexDir dirBetween(HexCoord a, HexCoord b) {
     return HexDir::None;
 }
 
-void walk(HexWorld& world, HexDir dir) {
-    world.setDesiredDirForTest(0, dir);
+void walkPlayer(HexWorld& world, PlayerId id, HexDir dir) {
+    world.setDesiredDirForTest(id, dir);
     world.advanceCellForTest();
+}
+
+void walk(HexWorld& world, HexDir dir) {
+    walkPlayer(world, 0, dir);
+}
+
+HexDir smartDecision(const HexWorld& world, PlayerId self, std::uint32_t seed = 123) {
+    auto bot = makeBot(BotSkill::Smart, seed);
+    const HexWorldView view(world);
+    return bot->decide(view, self);
 }
 
 void testHexMath() {
@@ -258,6 +277,32 @@ void testDeterminism() {
     }
 }
 
+// Hard mode uses Smart bots; it must remain deterministic for a fixed seed.
+void testSmartBotDeterminism() {
+    HexWorld a(2, 778);
+    HexWorld b(2, 778);
+    for (int k = 0; k < 300; ++k) {
+        a.step();
+        b.step();
+    }
+    assert(a.players().size() == b.players().size());
+    for (std::size_t i = 0; i < a.players().size(); ++i) {
+        const auto& pa = a.players().at(i);
+        const auto& pb = b.players().at(i);
+        assert(pa.alive == pb.alive);
+        assert(pa.cell == pb.cell);
+        assert(pa.territoryCount == pb.territoryCount);
+    }
+    const auto& ca = a.grid().cells();
+    const auto& cb = b.grid().cells();
+    assert(ca.size() == cb.size());
+    for (std::size_t i = 0; i < ca.size(); ++i) {
+        assert(ca.at(i).owner == cb.at(i).owner);
+        assert(ca.at(i).trailOwner == cb.at(i).trailOwner);
+        assert(ca.at(i).powerup == cb.at(i).powerup);
+    }
+}
+
 // Stepping onto a rival's trail kills the rival (and clears their trail); the
 // cutter survives.
 void testTrailCutDeath() {
@@ -330,6 +375,78 @@ void testTrailCutCapturesTerritory() {
     assert(world.territoryCount(1) == 0);
     assert(world.territoryCount(0) == before0 + before1); // cutter annexed the territory
     assert(world.ownerAt(victimHome) == 0);               // victim's cells are now the cutter's
+}
+
+// Smart bots take a safe adjacent trail cut instead of passively carving a loop.
+void testSmartBotCutsAdjacentTrail() {
+    HexWorld world(0, 200);
+    const int n = static_cast<int>(world.players().size());
+    for (int id = 2; id < n; ++id) {
+        world.setAliveForTest(static_cast<PlayerId>(id), false);
+    }
+    world.setAliveForTest(1, false); // keep the smart bot parked while the human draws a trail
+    for (const HexCoord c : {hc(10, 10), hc(11, 10), hc(11, 11)}) {
+        world.setOwnerForTest(c, og::hexanaut::kNeutral);
+    }
+
+    world.placePlayerForTest(0, hc(11, 11), HexDir::N);
+    walk(world, HexDir::N); // human trail now sits at (11,10)
+    assert(world.trailOwnerAt(hc(11, 10)) == 0);
+
+    world.setAliveForTest(1, true);
+    world.placePlayerForTest(1, hc(10, 10), HexDir::SE);
+
+    assert(smartDecision(world, 1) == HexDir::SE);
+}
+
+// When a smart bot is carrying an exposed trail and a rival is close, it banks the
+// loop by steering onto nearby owned land instead of continuing outward.
+void testSmartBotReturnsToOwnedLandWhenThreatened() {
+    HexWorld world(0, 201);
+    const int n = static_cast<int>(world.players().size());
+    world.setAliveForTest(0, false);
+    for (int id = 2; id < n; ++id) {
+        world.setAliveForTest(static_cast<PlayerId>(id), false);
+    }
+    for (const HexCoord c : {hc(9, 9), hc(10, 9), hc(10, 10), hc(11, 9)}) {
+        world.setOwnerForTest(c, og::hexanaut::kNeutral);
+    }
+    world.setOwnerForTest(hc(10, 10), 1);
+    world.placePlayerForTest(1, hc(10, 10), HexDir::N);
+    walkPlayer(world, 1, HexDir::N);
+    assert(world.trailOwnerAt(hc(10, 9)) == 1);
+
+    world.setOwnerForTest(hc(11, 9), 1); // nearby owned land the bot can bank onto
+    world.setAliveForTest(0, true);
+    world.placePlayerForTest(0, hc(9, 9), HexDir::N);
+
+    assert(smartDecision(world, 1) == HexDir::SE);
+}
+
+// Smart bots never choose an older own-trail cell when another legal move exists;
+// that would self-cut on the next simulation tick.
+void testSmartBotAvoidsOwnTrailTrap() {
+    HexWorld world(0, 202);
+    const int n = static_cast<int>(world.players().size());
+    world.setAliveForTest(0, false);
+    for (int id = 2; id < n; ++id) {
+        world.setAliveForTest(static_cast<PlayerId>(id), false);
+    }
+    for (const HexCoord c : {hc(10, 9), hc(10, 10), hc(11, 8), hc(11, 9)}) {
+        world.setOwnerForTest(c, og::hexanaut::kNeutral);
+    }
+
+    world.setOwnerForTest(hc(10, 10), 1);
+    world.placePlayerForTest(1, hc(10, 10), HexDir::N);
+    walkPlayer(world, 1, HexDir::N);
+    walkPlayer(world, 1, HexDir::NE);
+    walkPlayer(world, 1, HexDir::S);
+    assert(world.players().at(1).cell == hc(11, 9));
+    assert(world.trailOwnerAt(hc(10, 9)) == 1);
+
+    const HexDir decision = smartDecision(world, 1);
+    assert(decision != HexDir::NW);
+    assert(world.trailOwnerAt(neighbor(world.players().at(1).cell, decision)) != 1);
 }
 
 // On a saturated map (one player owns nearly everything) there is no clear spawn
@@ -522,8 +639,12 @@ int main() {
     testWallDeflection();
     testCaptureConservesCount();
     testDeterminism();
+    testSmartBotDeterminism();
     testTrailCutDeath();
     testTrailCutCapturesTerritory();
+    testSmartBotCutsAdjacentTrail();
+    testSmartBotReturnsToOwnedLandWhenThreatened();
+    testSmartBotAvoidsOwnTrailTrap();
     testCrowdedRespawnScatters();
     testShooterCaptures();
     testStaticShootersAtStart();
