@@ -24,6 +24,7 @@ using og::hexanaut::makeBot;
 using og::hexanaut::neighbor;
 using og::hexanaut::opposite;
 using og::hexanaut::PlayerId;
+using og::hexanaut::PowerUp;
 using og::hexanaut::quantizeToHexDir;
 using og::hexanaut::Vec2;
 using og::hexanaut::worldToAxial;
@@ -50,6 +51,39 @@ HexDir dirBetween(HexCoord a, HexCoord b) {
     return HexDir::None;
 }
 
+struct EntryStep {
+    HexCoord start{};
+    HexDir dir = HexDir::None;
+};
+
+EntryStep stepInto(const HexWorld& world, HexCoord target) {
+    for (int d = 0; d < 6; ++d) {
+        const HexCoord start = neighbor(target, static_cast<HexDir>(d));
+        if (world.grid().contains(start)) {
+            return {.start = start, .dir = opposite(static_cast<HexDir>(d))};
+        }
+    }
+    return {};
+}
+
+struct TwoStepEntry {
+    HexCoord before{};
+    HexCoord entry{};
+    HexDir dir = HexDir::None;
+};
+
+TwoStepEntry twoStepInto(const HexWorld& world, HexCoord target) {
+    for (int d = 0; d < 6; ++d) {
+        const auto away = static_cast<HexDir>(d);
+        const HexCoord entry = neighbor(target, away);
+        const HexCoord before = neighbor(entry, away);
+        if (world.grid().contains(entry) && world.grid().contains(before)) {
+            return {.before = before, .entry = entry, .dir = opposite(away)};
+        }
+    }
+    return {};
+}
+
 void walkPlayer(HexWorld& world, PlayerId id, HexDir dir) {
     world.setDesiredDirForTest(id, dir);
     world.advanceCellForTest();
@@ -57,6 +91,46 @@ void walkPlayer(HexWorld& world, PlayerId id, HexDir dir) {
 
 void walk(HexWorld& world, HexDir dir) {
     walkPlayer(world, 0, dir);
+}
+
+void assertTeleportEndpoint(const HexWorld& world, HexCoord c, std::vector<HexCoord>& endpoints) {
+    assert(world.ownerAt(c) == og::hexanaut::kNeutral);
+    assert(world.trailOwnerAt(c) == og::hexanaut::kNoTrail);
+    assert(world.grid().at(c).powerup == static_cast<std::uint8_t>(PowerUp::Teleport));
+    endpoints.push_back(c);
+}
+
+void assertUniqueEndpoints(const std::vector<HexCoord>& endpoints) {
+    for (std::size_t i = 0; i < endpoints.size(); ++i) {
+        for (std::size_t j = i + 1; j < endpoints.size(); ++j) {
+            assert(endpoints.at(i) != endpoints.at(j));
+        }
+    }
+}
+
+void assertTeleportPairPlacement(const HexWorld& world, const og::hexanaut::TeleportPair& t,
+                                 std::vector<HexCoord>& endpoints) {
+    assert(world.grid().contains(t.a));
+    assert(world.grid().contains(t.b));
+    assert(t.a != t.b);
+    assert(hexDistance(t.a, t.b) >= og::hexanaut::config::kTeleportMinDistance);
+    assertTeleportEndpoint(world, t.a, endpoints);
+    assertTeleportEndpoint(world, t.b, endpoints);
+}
+
+std::size_t countItemCells(const HexWorld& world) {
+    std::size_t count = 0;
+    for (const auto& cell : world.grid().cells()) {
+        if (cell.powerup != 0) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+std::size_t staticItemCount(const HexWorld& world) {
+    return world.shooters().size() + world.slowTotems().size() + world.spyDishes().size() +
+           (world.teleports().size() * 2);
 }
 
 HexDir smartDecision(const HexWorld& world, PlayerId self, std::uint32_t seed = 123) {
@@ -264,16 +338,25 @@ void testDeterminism() {
     }
     assert(a.players().size() == b.players().size());
     for (std::size_t i = 0; i < a.players().size(); ++i) {
-        assert(a.players()[i].alive == b.players()[i].alive);
-        assert(a.players()[i].cell == b.players()[i].cell);
-        assert(a.players()[i].territoryCount == b.players()[i].territoryCount);
+        const auto& pa = a.players().at(i);
+        const auto& pb = b.players().at(i);
+        assert(pa.alive == pb.alive);
+        assert(pa.cell == pb.cell);
+        assert(pa.territoryCount == pb.territoryCount);
+        assert(pa.teleportCooldown == pb.teleportCooldown);
     }
     const auto& ca = a.grid().cells();
     const auto& cb = b.grid().cells();
     assert(ca.size() == cb.size());
     for (std::size_t i = 0; i < ca.size(); ++i) {
-        assert(ca[i].owner == cb[i].owner);
-        assert(ca[i].trailOwner == cb[i].trailOwner);
+        assert(ca.at(i).owner == cb.at(i).owner);
+        assert(ca.at(i).trailOwner == cb.at(i).trailOwner);
+        assert(ca.at(i).powerup == cb.at(i).powerup);
+    }
+    assert(a.teleports().size() == b.teleports().size());
+    for (std::size_t i = 0; i < a.teleports().size(); ++i) {
+        assert(a.teleports().at(i).a == b.teleports().at(i).a);
+        assert(a.teleports().at(i).b == b.teleports().at(i).b);
     }
 }
 
@@ -292,6 +375,7 @@ void testSmartBotDeterminism() {
         assert(pa.alive == pb.alive);
         assert(pa.cell == pb.cell);
         assert(pa.territoryCount == pb.territoryCount);
+        assert(pa.teleportCooldown == pb.teleportCooldown);
     }
     const auto& ca = a.grid().cells();
     const auto& cb = b.grid().cells();
@@ -541,6 +625,122 @@ void testStaticShootersAtStart() {
     }
 }
 
+// Teleport pairs are fixed map fixtures: two endpoints per pair, on neutral open
+// ground, far enough apart to read as a meaningful route.
+void testStaticTeleportsAtStart() {
+    HexWorld world(0, 101);
+    const std::size_t n = world.teleports().size();
+    assert(n == static_cast<std::size_t>(og::hexanaut::config::paramsFor(0).teleportPairCount));
+    std::vector<HexCoord> endpoints;
+    endpoints.reserve(n * 2);
+    for (const auto& t : world.teleports()) {
+        assertTeleportPairPlacement(world, t, endpoints);
+    }
+    assertUniqueEndpoints(endpoints);
+    for (int k = 0; k < 200; ++k) {
+        world.step();
+    }
+    assert(world.teleports().size() == n);
+    for (std::size_t i = 0; i < n; ++i) {
+        assert(world.teleports().at(i).a == endpoints.at(i * 2));
+        assert(world.teleports().at(i).b == endpoints.at((i * 2) + 1));
+    }
+}
+
+// Owning one endpoint, or two unrelated endpoints, is not enough: only the exact
+// paired endpoints activate.
+void testTeleportNeedsExactOwnedPair() {
+    HexWorld world(0, 102);
+    soloHuman(world);
+    const auto first = world.teleports().at(0);
+    const auto second = world.teleports().at(1);
+    const EntryStep entry = stepInto(world, first.a);
+    world.setOwnerForTest(entry.start, og::hexanaut::kNeutral);
+    world.setOwnerForTest(first.a, 0);
+    world.setOwnerForTest(first.b, og::hexanaut::kNeutral);
+    world.setOwnerForTest(second.a, 0);
+    world.placePlayerForTest(0, entry.start, entry.dir);
+
+    walk(world, entry.dir);
+
+    assert(world.player().cell == first.a);
+    assert(world.player().teleportCooldown == 0.0F);
+}
+
+// A completed pair teleports only its owner. Enemies stepping on the same active
+// endpoint just move onto the cell normally and start cutting its territory.
+void testTeleportOwnerOnlyActivation() {
+    HexWorld world(0, 103);
+    soloHuman(world);
+    const auto pair = world.teleports().at(0);
+    const EntryStep entry = stepInto(world, pair.a);
+    world.setOwnerForTest(entry.start, og::hexanaut::kNeutral);
+    world.setOwnerForTest(pair.a, 0);
+    world.setOwnerForTest(pair.b, 0);
+    world.placePlayerForTest(0, entry.start, entry.dir);
+
+    walk(world, entry.dir);
+
+    assert(world.player().cell == pair.b);
+    assert(world.player().teleportCooldown > 0.0F);
+
+    HexWorld enemyWorld(0, 103);
+    const int n = static_cast<int>(enemyWorld.players().size());
+    enemyWorld.setAliveForTest(0, false);
+    for (int id = 2; id < n; ++id) {
+        enemyWorld.setAliveForTest(static_cast<PlayerId>(id), false);
+    }
+    const auto enemyPair = enemyWorld.teleports().at(0);
+    const EntryStep enemyEntry = stepInto(enemyWorld, enemyPair.a);
+    enemyWorld.setOwnerForTest(enemyEntry.start, og::hexanaut::kNeutral);
+    enemyWorld.setOwnerForTest(enemyPair.a, 0);
+    enemyWorld.setOwnerForTest(enemyPair.b, 0);
+    enemyWorld.placePlayerForTest(1, enemyEntry.start, enemyEntry.dir);
+    enemyWorld.setDesiredDirForTest(1, enemyEntry.dir);
+    enemyWorld.advanceCellForTest();
+
+    assert(enemyWorld.players().at(1).alive);
+    assert(enemyWorld.players().at(1).cell == enemyPair.a);
+    assert(enemyWorld.players().at(1).teleportCooldown == 0.0F);
+}
+
+// Teleporting into owned land still uses the normal close-trail path: the trail
+// cell becomes territory and is cleared.
+void testTeleportClosesTrailAtDestination() {
+    HexWorld world(0, 104);
+    soloHuman(world);
+    const auto pair = world.teleports().at(0);
+    const TwoStepEntry entry = twoStepInto(world, pair.a);
+    world.setOwnerForTest(entry.before, og::hexanaut::kNeutral);
+    world.setOwnerForTest(entry.entry, og::hexanaut::kNeutral);
+    world.setOwnerForTest(pair.a, 0);
+    world.setOwnerForTest(pair.b, 0);
+    world.placePlayerForTest(0, entry.before, entry.dir);
+
+    walk(world, entry.dir);
+    assert(world.player().cell == entry.entry);
+    assert(world.trailOwnerAt(entry.entry) == 0);
+    walk(world, entry.dir);
+
+    assert(world.playerAlive());
+    assert(world.player().cell == pair.b);
+    assert(world.trailOf(0).empty());
+    assert(world.ownerAt(entry.entry) == 0);
+    assert(world.trailOwnerAt(entry.entry) == og::hexanaut::kNoTrail);
+}
+
+// The map contains only static fixtures: no Speed/Vision-style temporary items
+// should spawn over time, even on difficulties that used to have timed spawns.
+void testOnlyStaticItemsRemain() {
+    HexWorld world(2, 105);
+    const std::size_t expected = staticItemCount(world);
+    assert(countItemCells(world) == expected);
+    for (int k = 0; k < 1200; ++k) {
+        world.step();
+    }
+    assert(countItemCells(world) == expected);
+}
+
 // An un-captured shooter (its cell is neutral) does nothing — no captures occur.
 void testShooterInertWhenUnowned() {
     HexWorld world(0, 7);
@@ -564,7 +764,7 @@ float runSlowScenario(og::hexanaut::PlayerId totemOwner) {
     }
     const HexCoord totem{10, 10};
     world.setSlowTotemForTest(totem);
-    world.setOwnerForTest(totem, totemOwner); // the totem acts for whoever owns it
+    world.setOwnerForTest(totem, totemOwner);        // the totem acts for whoever owns it
     world.placePlayerForTest(0, {10, 8}, HexDir::N); // 2 hexes inside the field
     const Vec2 start = world.player().pos;
     for (int k = 0; k < 12; ++k) {
@@ -597,32 +797,6 @@ void testSpyDishReveal() {
     assert(world.hasSpyReveal(0)); // human captured it -> revealed
 }
 
-// Stepping onto a Speed power-up lowers stepInterval and arms its timer; a Vision
-// power-up arms the vision timer.
-void testPowerupPickup() {
-    HexWorld world(0, 8);
-    const int n = static_cast<int>(world.players().size());
-    for (int id = 1; id < n; ++id) {
-        world.setAliveForTest(static_cast<og::hexanaut::PlayerId>(id), false);
-    }
-    for (const HexCoord c : {HexCoord{5, 5}, HexCoord{5, 4}, HexCoord{5, 3}}) {
-        world.setOwnerForTest(c, og::hexanaut::kNeutral);
-    }
-    world.placePlayerForTest(0, {5, 5}, HexDir::N);
-    const float base = world.players()[0].stepInterval;
-
-    world.setPowerupForTest({5, 4}, og::hexanaut::PowerUp::Speed);
-    world.setDesiredDirForTest(0, HexDir::N);
-    world.advanceCellForTest(); // enter (5,4) -> Speed
-    assert(world.players()[0].stepInterval < base);
-    assert(world.players()[0].speedTimer > 0.0F);
-
-    world.setPowerupForTest({5, 3}, og::hexanaut::PowerUp::Vision);
-    world.setDesiredDirForTest(0, HexDir::N);
-    world.advanceCellForTest(); // enter (5,3) -> Vision
-    assert(world.players()[0].visionTimer > 0.0F);
-}
-
 } // namespace
 
 int main() {
@@ -648,11 +822,15 @@ int main() {
     testCrowdedRespawnScatters();
     testShooterCaptures();
     testStaticShootersAtStart();
+    testStaticTeleportsAtStart();
+    testTeleportNeedsExactOwnedPair();
+    testTeleportOwnerOnlyActivation();
+    testTeleportClosesTrailAtDestination();
+    testOnlyStaticItemsRemain();
     testShooterInertWhenUnowned();
     testSlowFieldSlowsEnemies();
     testSpyDishReveal();
     testHeadToHead();
-    testPowerupPickup();
     std::puts("All Hexanaut tests passed.");
     return 0;
 }

@@ -33,8 +33,6 @@ HexWorld::HexWorld(int difficultyIndex, std::uint32_t seed)
       rng_(seed), totalCells_(grid_.cellCount()) {
     const config::DifficultyParams params = config::paramsFor(difficultyIndex);
     visited_.assign(static_cast<std::size_t>(totalCells_), 0);
-    powerupInterval_ = params.powerupInterval;
-    maxPowerups_ = params.maxPowerups;
 
     Player human;
     human.id = 0;
@@ -64,6 +62,7 @@ HexWorld::HexWorld(int difficultyIndex, std::uint32_t seed)
     generateShooters(params.shooterCount);
     generateSlowTotems(params.slowTotemCount);
     generateSpyDishes(params.spyDishCount);
+    generateTeleports(params.teleportPairCount);
 }
 
 void HexWorld::spawnHome(Player& p, HexCoord center, int radius) {
@@ -77,9 +76,8 @@ void HexWorld::spawnHome(Player& p, HexCoord center, int radius) {
     p.desiredDir = HexDir::None;
     p.alive = true;
     p.trail.clear();
-    p.stepInterval = p.baseStepInterval; // a respawn drops any active power-up
-    p.speedTimer = 0.0F;
-    p.visionTimer = 0.0F;
+    p.stepInterval = p.baseStepInterval;
+    p.teleportCooldown = 0.0F;
     for (int q = center.q - radius; q <= center.q + radius; ++q) {
         for (int r = center.r - radius; r <= center.r + radius; ++r) {
             const HexCoord h{q, r};
@@ -137,7 +135,6 @@ void HexWorld::decideBots() {
 void HexWorld::step() {
     decideBots();
     decayEffects();
-    maybeSpawnPowerup();
     resolveTick(integrateMotion(), true);
     updateShooters(); // capture with lasers after movement/territory settle
 }
@@ -147,59 +144,9 @@ void HexWorld::decayEffects() {
         if (!p.alive) {
             continue;
         }
-        if (p.speedTimer > 0.0F) {
-            p.speedTimer -= config::kFixedDt;
-            if (p.speedTimer <= 0.0F) {
-                p.speedTimer = 0.0F;
-                p.stepInterval = p.baseStepInterval;
-            }
+        if (p.teleportCooldown > 0.0F) {
+            p.teleportCooldown = std::max(0.0F, p.teleportCooldown - config::kFixedDt);
         }
-        if (p.visionTimer > 0.0F) {
-            p.visionTimer = std::max(0.0F, p.visionTimer - config::kFixedDt);
-        }
-    }
-}
-
-void HexWorld::maybeSpawnPowerup() {
-    if (powerupInterval_ <= 0.0F) {
-        return;
-    }
-    powerupAccum_ += config::kFixedDt;
-    if (powerupAccum_ < powerupInterval_) {
-        return;
-    }
-    powerupAccum_ = 0.0F;
-    if (activePowerups_ >= maxPowerups_) {
-        return;
-    }
-    std::uniform_int_distribution<int> qd(1, grid_.width() - 2);
-    std::uniform_int_distribution<int> rd(1, grid_.height() - 2);
-    for (int attempt = 0; attempt < 60; ++attempt) {
-        const HexCoord c{qd(rng_), rd(rng_)};
-        Cell& cell = grid_.at(c);
-        if (cell.owner == kNeutral && cell.trailOwner == kNoTrail && cell.powerup == 0) {
-            const PowerUp type = (rng_() % 2U == 0U) ? PowerUp::Speed : PowerUp::Vision;
-            cell.powerup = static_cast<std::uint8_t>(type);
-            ++activePowerups_;
-            return;
-        }
-    }
-}
-
-void HexWorld::applyPowerup(Player& p, PowerUp type) {
-    switch (type) {
-    case PowerUp::Speed:
-        p.stepInterval = p.baseStepInterval * config::kSpeedFactor;
-        p.speedTimer = config::kSpeedDuration;
-        break;
-    case PowerUp::Vision:
-        p.visionTimer = config::kVisionDuration;
-        break;
-    case PowerUp::Shooter:   // not a collectible buff; handled by updateShooters
-    case PowerUp::SlowTotem: // not a collectible buff; a positional slowing field
-    case PowerUp::SpyDish:   // not a collectible buff; a minimap-reveal field
-    case PowerUp::None:
-        break;
     }
 }
 
@@ -250,6 +197,34 @@ void HexWorld::generateSpyDishes(int count) {
     }
 }
 
+bool HexWorld::findFreeTeleportPair(HexCoord& a, HexCoord& b) {
+    for (int attempt = 0; attempt < 80; ++attempt) {
+        HexCoord first{};
+        HexCoord second{};
+        if (!findFreeItemCell(first) || !findFreeItemCell(second)) {
+            return false;
+        }
+        if (hexDistance(first, second) >= config::kTeleportMinDistance) {
+            a = first;
+            b = second;
+            return true;
+        }
+    }
+    return false;
+}
+
+void HexWorld::generateTeleports(int pairCount) {
+    for (int i = 0; i < pairCount; ++i) {
+        HexCoord a{};
+        HexCoord b{};
+        if (findFreeTeleportPair(a, b)) {
+            grid_.at(a).powerup = static_cast<std::uint8_t>(PowerUp::Teleport);
+            grid_.at(b).powerup = static_cast<std::uint8_t>(PowerUp::Teleport);
+            teleports_.push_back(TeleportPair{.a = a, .b = b});
+        }
+    }
+}
+
 bool HexWorld::hasSpyReveal(PlayerId id) const {
     return std::ranges::any_of(spyDishes_,
                                [&](const SpyDish& d) { return grid_.at(d.cell).owner == id; });
@@ -258,8 +233,7 @@ bool HexWorld::hasSpyReveal(PlayerId id) const {
 bool HexWorld::inEnemySlowField(PlayerId id, HexCoord cell) const {
     return std::ranges::any_of(slowTotems_, [&](const SlowTotem& t) {
         const PlayerId owner = grid_.at(t.cell).owner;
-        return owner != kNeutral && owner != id &&
-               hexDistance(t.cell, cell) <= config::kSlowRadius;
+        return owner != kNeutral && owner != id && hexDistance(t.cell, cell) <= config::kSlowRadius;
     });
 }
 
@@ -325,9 +299,11 @@ void HexWorld::advanceCellForTest() {
 }
 
 void HexWorld::resolveTick(const std::vector<Move>& moves, bool allowRespawn) {
+    std::vector<Move> resolvedMoves = moves;
+    resolveTeleports(resolvedMoves);
     std::vector<char> dead(players_.size(), 0);
     std::vector<PlayerId> killer(players_.size(), kNeutral);
-    detectDeaths(moves, dead, killer);
+    detectDeaths(resolvedMoves, dead, killer);
     for (std::size_t i = 0; i < players_.size(); ++i) {
         if (dead.at(i) != 0) {
             // A killer that itself fell this tick (mutual cut) can't inherit land,
@@ -339,9 +315,45 @@ void HexWorld::resolveTick(const std::vector<Move>& moves, bool allowRespawn) {
             killPlayer(players_.at(i).id, k);
         }
     }
-    commitMoves(moves, dead);
+    commitMoves(resolvedMoves, dead);
     if (allowRespawn) {
         respawnDeadBots();
+    }
+}
+
+bool HexWorld::pairedTeleportDestination(PlayerId id, HexCoord from, HexCoord& out) const {
+    for (const TeleportPair& t : teleports_) {
+        const bool atA = from == t.a;
+        const bool atB = from == t.b;
+        if (!atA && !atB) {
+            continue;
+        }
+        if (grid_.at(t.a).owner == id && grid_.at(t.b).owner == id) {
+            out = atA ? t.b : t.a;
+            return true;
+        }
+    }
+    return false;
+}
+
+void HexWorld::resolveTeleports(std::vector<Move>& moves) {
+    for (std::size_t i = 0; i < players_.size(); ++i) {
+        Player& p = players_.at(i);
+        Move& move = moves.at(i);
+        if (!p.alive || !move.entered || p.teleportCooldown > 0.0F) {
+            continue;
+        }
+        const Cell& entry = grid_.at(move.target);
+        if (entry.powerup != static_cast<std::uint8_t>(PowerUp::Teleport) ||
+            entry.trailOwner != kNoTrail) {
+            continue;
+        }
+        HexCoord destination{};
+        if (pairedTeleportDestination(p.id, move.target, destination)) {
+            move.target = destination;
+            move.pos = axialToWorld(destination, config::kHexSize);
+            p.teleportCooldown = config::kTeleportCooldown;
+        }
     }
 }
 
@@ -446,7 +458,7 @@ void HexWorld::detectDeaths(const std::vector<Move>& moves, std::vector<char>& d
         } else {
             dead.at(static_cast<std::size_t>(trailOwner)) = 1;
             killer.at(static_cast<std::size_t>(trailOwner)) = players_.at(i).id; // the cutter
-            players_.at(i).kills += 1;                                           // credit the cutter
+            players_.at(i).kills += 1; // credit the cutter
         }
     }
     // Head-to-head: two avatars crossing into the same cell this tick both fall.
@@ -488,16 +500,6 @@ void HexWorld::commitMoves(const std::vector<Move>& moves, const std::vector<cha
             // the death pass; never double-record a cell already in our own trail).
             tc.trailOwner = p.id;
             p.trail.push_back(p.cell);
-        }
-        // Only Speed/Vision are collected on contact; the Shooter and SlowTotem are
-        // fixed items (they act for whoever owns their cell), so step over them.
-        if (tc.powerup == static_cast<std::uint8_t>(PowerUp::Speed) ||
-            tc.powerup == static_cast<std::uint8_t>(PowerUp::Vision)) {
-            applyPowerup(p, static_cast<PowerUp>(tc.powerup));
-            tc.powerup = 0;
-            if (activePowerups_ > 0) {
-                --activePowerups_;
-            }
         }
     }
 }

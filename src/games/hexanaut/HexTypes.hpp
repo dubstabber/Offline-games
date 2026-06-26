@@ -18,14 +18,15 @@ using PlayerId = std::uint8_t;
 inline constexpr PlayerId kNeutral = 0xFF;
 inline constexpr PlayerId kNoTrail = 0xFF;
 
-// Map items. Stored in Cell::powerup as the underlying byte (0 = none). Speed and
-// Vision are collectible buffs (picked up by stepping on them). Shooter, SlowTotem
-// and SpyDish are persistent, territory-bound items: never picked up — they act for
-// whoever currently owns the cell they sit on, and can be stolen by capturing that
-// cell. Shooter captures nearby land with lasers (HexWorld::updateShooters);
-// SlowTotem slows every other avatar in its field (inEnemySlowField); SpyDish, while
-// owned by the human, reveals all territories on the minimap (HexWorld::hasSpyReveal).
-enum class PowerUp : std::uint8_t { None, Speed, Vision, Shooter, SlowTotem, SpyDish };
+// Static map items. Stored in Cell::powerup as the underlying byte (0 = none).
+// They are never picked up; they act for whoever currently owns the cell they sit
+// on, and can be stolen by capturing that cell. Shooter captures nearby land with
+// lasers (HexWorld::updateShooters); SlowTotem slows every other avatar in its
+// field (inEnemySlowField); SpyDish, while owned by the human, reveals all
+// territories on the minimap (HexWorld::hasSpyReveal).
+// Teleport is also persistent: paired endpoints work only while both endpoint
+// cells belong to the same player, and only that owner can use the link.
+enum class PowerUp : std::uint8_t { None, Shooter, SlowTotem, SpyDish, Teleport };
 
 struct Vec2 {
     float x = 0.0F;

@@ -253,10 +253,8 @@ void HexanautScene::updateCamera(float dtSeconds) {
     const float follow = 1.0F - std::exp(-kFollowRate * dtSeconds);
     camX_ += (a.x - camX_) * follow;
     camY_ += (a.y - camY_) * follow;
-    // The Vision power-up zooms the camera out for a wider view.
-    const float targetZoom = world_.player().visionTimer > 0.0F ? cfg::kVisionZoom : cfg::kBaseZoom;
     const float zoomEase = 1.0F - std::exp(-4.0F * dtSeconds);
-    zoom_ += (targetZoom - zoom_) * zoomEase;
+    zoom_ += (cfg::kBaseZoom - zoom_) * zoomEase;
 }
 
 // ---- Rendering --------------------------------------------------------------
@@ -302,7 +300,6 @@ void HexanautScene::appendWall(Vec2 centerWorld, int edge, float liftTop, Color 
 void HexanautScene::drawField(Canvas& canvas) {
     meshVerts_.clear();
     meshIdx_.clear();
-    powerupDraws_.clear();
     trailOutlines_.clear();
 
     const hexanaut::HexGrid& grid = world_.grid();
@@ -390,12 +387,6 @@ void HexanautScene::appendCellPrism(const hexanaut::HexGrid& grid, HexCoord coor
         appendOwnedPrism(grid, coord, center, cell.owner);
     } else {
         appendHexTop(center, cfg::kGroundInset, 0.0F, pal::kGroundTop, pal::kGroundBottom);
-    }
-    // Only Speed/Vision render as floating bubbles here; the Shooter and SlowTotem
-    // are drawn separately (crystal+laser / cloud+snow) from their own sim lists.
-    if (cell.powerup == static_cast<std::uint8_t>(hexanaut::PowerUp::Speed) ||
-        cell.powerup == static_cast<std::uint8_t>(hexanaut::PowerUp::Vision)) {
-        powerupDraws_.push_back({.center = center, .type = cell.powerup});
     }
 }
 
@@ -555,19 +546,6 @@ void HexanautScene::drawParticles(Canvas& canvas) {
         }
     }
     canvas.fillMesh(meshVerts_, meshIdx_);
-}
-
-void HexanautScene::drawPowerups(Canvas& canvas) const {
-    constexpr const char* kBolt = "\xE2\x9A\xA1";    // ⚡ Speed
-    constexpr const char* kEye = "\xF0\x9F\x91\x81"; // 👁 Vision
-    for (const PowerupDraw& pd : powerupDraws_) {
-        const ScreenPos sp = toScreen(pd.center, cfg::kPrismLift + 22.0F);
-        const float rad = std::max(12.0F, cfg::kHexSize * zoom_ * 0.6F);
-        canvas.fillCircle(sp.x, sp.y, rad, rgb(20, 22, 30, 210));
-        canvas.fillCircle(sp.x, sp.y, rad - 3.0F, rgb(248, 248, 252, 235));
-        const bool speed = pd.type == static_cast<std::uint8_t>(hexanaut::PowerUp::Speed);
-        canvas.emojiCentered(speed ? kBolt : kEye, sp.x, sp.y, rad * 1.4F);
-    }
 }
 
 void HexanautScene::updateLasers(float dtSeconds) {
@@ -842,6 +820,114 @@ void HexanautScene::drawSpyDishes(Canvas& canvas) const {
     }
 }
 
+void HexanautScene::drawTeleportTube(Canvas& canvas, Vec2 from, Vec2 to,
+                                     hexanaut::PlayerId owner) const {
+    const Vec2 delta = to - from;
+    const float len = hexanaut::length(delta);
+    if (len < 1.0F) {
+        return;
+    }
+    const Vec2 mid = hexanaut::lerp(from, to, 0.5F);
+    const Vec2 perp{-delta.y / len, delta.x / len};
+    const float curve = std::clamp(len * 0.18F, 45.0F, 170.0F);
+    const Vec2 ctrl = mid + (perp * curve);
+    constexpr float kLift = cfg::kPrismLift + 22.0F;
+    constexpr int kSeg = 18;
+    const float tubeW = std::max(8.0F, cfg::kHexSize * zoom_ * 0.34F);
+    const Color ownerCol = pal::topColor(owner);
+
+    const auto pointAt = [&](float t) {
+        const Vec2 ab = hexanaut::lerp(from, ctrl, t);
+        const Vec2 bc = hexanaut::lerp(ctrl, to, t);
+        return hexanaut::lerp(ab, bc, t);
+    };
+    const auto stroke = [&](float width, Color color, float dy) {
+        ScreenPos prev = toScreen(from, kLift);
+        for (int i = 1; i <= kSeg; ++i) {
+            const float t = static_cast<float>(i) / static_cast<float>(kSeg);
+            const ScreenPos cur = toScreen(pointAt(t), kLift);
+            canvas.line(prev.x, prev.y + dy, cur.x, cur.y + dy, width, color);
+            prev = cur;
+        }
+    };
+
+    stroke(tubeW * 2.8F, pal::withAlpha(ownerCol, 42), 0.0F);
+    stroke(tubeW * 2.0F, rgb(0, 0, 0, 80), tubeW * 0.18F);
+    stroke(tubeW * 1.45F, rgb(210, 214, 220), 0.0F);
+    stroke(tubeW, rgb(250, 250, 252), 0.0F);
+    stroke(tubeW * 0.28F, rgb(255, 255, 255), -tubeW * 0.28F);
+}
+
+void HexanautScene::drawTeleportEndpoint(Canvas& canvas, Vec2 worldCenter, bool active,
+                                         hexanaut::PlayerId owner, int phase) const {
+    constexpr float kS = cfg::kHexSize;
+    const ScreenPos base = toScreen(worldCenter, cfg::kPrismLift);
+    constexpr float kMargin = 90.0F;
+    if (base.x < -kMargin || base.x > layout::kWidthF + kMargin || base.y < -kMargin ||
+        base.y > layout::kHeightF + kMargin) {
+        return;
+    }
+
+    const float r = std::max(10.0F, kS * zoom_ * 0.48F);
+    const float bob = std::sin((animTime_ * 2.8F) + (static_cast<float>(phase) * 0.55F)) * 2.4F;
+    canvas.fillCircle(base.x, base.y + (r * 0.32F), r * 0.95F, rgb(0, 0, 0, 82));
+
+    const ScreenPos c = toScreen(worldCenter, cfg::kPrismLift + 14.0F + bob);
+    if (active) {
+        canvas.fillCircle(c.x, c.y, r * 1.55F, pal::withAlpha(pal::topColor(owner), 50));
+    }
+
+    const Color shellTop = active ? rgb(166, 194, 255) : rgb(112, 118, 138);
+    const Color shellBottom = active ? rgb(64, 88, 206) : rgb(54, 58, 72);
+    constexpr int kSeg = 16;
+    std::array<Canvas::Vertex, kSeg> dome{};
+    for (int k = 0; k < kSeg; ++k) {
+        const float a =
+            (static_cast<float>(k) / static_cast<float>(kSeg)) * 2.0F * std::numbers::pi_v<float>;
+        const float ex = std::cos(a) * r * 0.92F;
+        const float ey = std::sin(a) * r * 0.42F;
+        const float shade = std::clamp(((ey / (r * 0.42F)) * 0.5F) + 0.5F, 0.0F, 1.0F);
+        dome.at(static_cast<std::size_t>(k)) = {.x = c.x + ex,
+                                                .y = c.y - (r * 0.2F) + ey,
+                                                .color = pal::mix(shellTop, shellBottom, shade)};
+    }
+    canvas.fillConvexPolygon(dome);
+
+    const Color magenta = active ? rgb(220, 42, 184) : rgb(132, 54, 126);
+    const Color darkMagenta = active ? rgb(120, 24, 110) : rgb(70, 36, 76);
+    const std::array<Canvas::Vertex, 4> skirt{{
+        {.x = c.x - (r * 1.0F), .y = c.y - (r * 0.05F), .color = magenta},
+        {.x = c.x + (r * 1.0F), .y = c.y - (r * 0.05F), .color = magenta},
+        {.x = c.x + (r * 0.62F), .y = c.y + (r * 0.55F), .color = darkMagenta},
+        {.x = c.x - (r * 0.62F), .y = c.y + (r * 0.55F), .color = darkMagenta},
+    }};
+    canvas.fillConvexPolygon(skirt);
+    canvas.line(c.x - (r * 1.02F), c.y - (r * 0.05F), c.x + (r * 1.02F), c.y - (r * 0.05F),
+                std::max(2.0F, r * 0.12F), rgb(236, 64, 202));
+    canvas.fillCircle(c.x + (r * 0.5F), c.y - (r * 0.34F), r * 0.22F,
+                      active ? rgb(58, 210, 246) : rgb(66, 128, 152));
+    canvas.fillCircle(c.x, c.y + (r * 0.14F), r * 0.14F,
+                      active ? rgb(238, 224, 244) : rgb(130, 118, 138));
+}
+
+void HexanautScene::drawTeleports(Canvas& canvas) const {
+    constexpr float kS = cfg::kHexSize;
+    for (const hexanaut::TeleportPair& t : world_.teleports()) {
+        const hexanaut::PlayerId owner = world_.ownerAt(t.a);
+        if (owner != hexanaut::kNeutral && world_.ownerAt(t.b) == owner) {
+            drawTeleportTube(canvas, hexanaut::axialToWorld(t.a, kS),
+                             hexanaut::axialToWorld(t.b, kS), owner);
+        }
+    }
+    for (const hexanaut::TeleportPair& t : world_.teleports()) {
+        const hexanaut::PlayerId owner = world_.ownerAt(t.a);
+        const bool active = owner != hexanaut::kNeutral && world_.ownerAt(t.b) == owner;
+        drawTeleportEndpoint(canvas, hexanaut::axialToWorld(t.a, kS), active, owner, t.a.q);
+        drawTeleportEndpoint(canvas, hexanaut::axialToWorld(t.b, kS), active,
+                             active ? owner : world_.ownerAt(t.b), t.b.q);
+    }
+}
+
 void HexanautScene::drawAvatars(Canvas& canvas) const {
     for (const Player& p : world_.players()) {
         if (!p.alive) {
@@ -1078,6 +1164,22 @@ void HexanautScene::drawMinimapItems(Canvas& canvas, float boxX, float boxY, flo
         canvas.line(hubx, huby, ix + (kIcon * 0.55F), iy - (kIcon * 0.5F), 1.4F,
                     rgb(224, 228, 238));
     }
+    // Teleport: purple ring with magenta slash and cyan highlight.
+    const auto teleportIcon = [&](HexCoord c) {
+        const float ix = cellX(c.q);
+        const float iy = cellY(c.r);
+        tile(ix, iy, world_.ownerAt(c));
+        canvas.fillCircle(ix, iy, kIcon * 0.7F, rgb(104, 42, 116));
+        canvas.fillCircle(ix, iy, kIcon * 0.46F, rgb(24, 22, 34));
+        canvas.line(ix - (kIcon * 0.48F), iy + (kIcon * 0.34F), ix + (kIcon * 0.48F),
+                    iy - (kIcon * 0.34F), 1.7F, rgb(224, 52, 190));
+        canvas.fillCircle(ix + (kIcon * 0.36F), iy - (kIcon * 0.42F), kIcon * 0.16F,
+                          rgb(64, 216, 246));
+    };
+    for (const hexanaut::TeleportPair& t : world_.teleports()) {
+        teleportIcon(t.a);
+        teleportIcon(t.b);
+    }
 }
 
 void HexanautScene::drawMinimap(Canvas& canvas) {
@@ -1154,7 +1256,7 @@ void HexanautScene::render(Canvas& canvas) {
     drawShooters(canvas);
     drawSlowTotems(canvas);
     drawSpyDishes(canvas);
-    drawPowerups(canvas);
+    drawTeleports(canvas);
     drawAvatars(canvas);
     drawParticles(canvas);
     drawHud(canvas);

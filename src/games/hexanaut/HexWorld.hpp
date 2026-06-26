@@ -33,10 +33,9 @@ struct Player {
     HexDir heading = HexDir::N;       // `angle` snapped to 6 axes (for bots/view)
     HexDir desiredDir = HexDir::None; // bot/test desired axis -> desiredAngle
 
-    float stepInterval = 0.15F;     // seconds per hex (lowered while Speed is active)
-    float baseStepInterval = 0.15F; // restored when Speed wears off
-    float speedTimer = 0.0F;        // seconds of Speed power-up left
-    float visionTimer = 0.0F;       // seconds of Vision left (human only; the Scene reads it)
+    float stepInterval = 0.15F;     // seconds per hex
+    float baseStepInterval = 0.15F; // restored on respawn
+    float teleportCooldown = 0.0F;  // seconds until another paired teleport may trigger
 
     int territoryCount = 0;
     int kills = 0;
@@ -80,6 +79,13 @@ struct SpyDish {
     HexCoord cell{};
 };
 
+// A persistent bidirectional teleport relationship. The endpoints are fixed map
+// items; unrelated endpoints never connect, even if a player owns several.
+struct TeleportPair {
+    HexCoord a{};
+    HexCoord b{};
+};
+
 class HexWorld {
 public:
     HexWorld(int difficultyIndex, std::uint32_t seed);
@@ -97,6 +103,7 @@ public:
     [[nodiscard]] const std::vector<Shooter>& shooters() const { return shooters_; }
     [[nodiscard]] const std::vector<SlowTotem>& slowTotems() const { return slowTotems_; }
     [[nodiscard]] const std::vector<SpyDish>& spyDishes() const { return spyDishes_; }
+    [[nodiscard]] const std::vector<TeleportPair>& teleports() const { return teleports_; }
     // True if `id` owns at least one spy dish (so the minimap reveals all
     // territories for them). Owning several is no different from owning one.
     [[nodiscard]] bool hasSpyReveal(PlayerId id) const;
@@ -120,9 +127,6 @@ public:
         return players_.at(static_cast<std::size_t>(id)).trail;
     }
     void setOwnerForTest(HexCoord c, PlayerId id) { setOwner(c, id); }
-    void setPowerupForTest(HexCoord c, PowerUp type) {
-        grid_.at(c).powerup = static_cast<std::uint8_t>(type);
-    }
     void placePlayerForTest(PlayerId id, HexCoord cell, HexDir heading);
     void setDesiredDirForTest(PlayerId id, HexDir dir) {
         players_.at(static_cast<std::size_t>(id)).desiredDir = dir;
@@ -148,6 +152,11 @@ public:
         grid_.at(c).powerup = static_cast<std::uint8_t>(PowerUp::SpyDish);
         spyDishes_.push_back(SpyDish{.cell = c});
     }
+    void setTeleportPairForTest(HexCoord a, HexCoord b) {
+        grid_.at(a).powerup = static_cast<std::uint8_t>(PowerUp::Teleport);
+        grid_.at(b).powerup = static_cast<std::uint8_t>(PowerUp::Teleport);
+        teleports_.push_back(TeleportPair{.a = a, .b = b});
+    }
     void advanceShootersForTest(int ticks) {
         for (int i = 0; i < ticks; ++i) {
             updateShooters();
@@ -166,15 +175,16 @@ private:
     [[nodiscard]] HexCoord findSpawn(int clearRadius);
     void decideBots();
     void decayEffects();
-    void maybeSpawnPowerup();
     // Place `count` static items once at construction: map prizes that never move
     // or respawn, shown on the minimap and contested via territory.
     void generateShooters(int count);
     void generateSlowTotems(int count);
     void generateSpyDishes(int count);
+    void generateTeleports(int pairCount);
     // A random neutral, trail-free, item-free cell to drop a static item on; false
     // if none found within the attempt budget. Shared by the generators above.
     [[nodiscard]] bool findFreeItemCell(HexCoord& out);
+    [[nodiscard]] bool findFreeTeleportPair(HexCoord& a, HexCoord& b);
     // True if `cell` lies in the slowing field of a totem owned by someone other
     // than `id` (the owner is immune), so that avatar moves slower this tick.
     [[nodiscard]] bool inEnemySlowField(PlayerId id, HexCoord cell) const;
@@ -186,12 +196,10 @@ private:
     // via bounded BFS. Returns false if none in range. `from` must be owner-owned.
     [[nodiscard]] bool nearestShooterTarget(HexCoord from, PlayerId owner, HexCoord& out,
                                             int& outDist) const;
-    static void applyPowerup(Player& p, PowerUp type);
     [[nodiscard]] HexDir deflectHeading(HexCoord cell, HexDir heading) const;
     // Steer `angle` to the nearest heading whose `probe`-long forward step stays
     // on the board, so a free-moving avatar slides along walls instead of leaving.
     [[nodiscard]] float deflectAngle(Vec2 pos, float angle, float probe) const;
-
     // One tick of motion, split into compute-then-apply stages (mirrors how
     // SnakeWorld::step delegates to small sub-steps). `pos`/`angle`/`heading` are
     // the new pose; `entered` flags that the avatar crossed into `target` this
@@ -203,6 +211,10 @@ private:
         float angle = 0.0F;
         Vec2 pos;
     };
+    // Rewrite a move that enters an active owned teleport endpoint so the usual
+    // death/capture pass resolves at the paired destination.
+    void resolveTeleports(std::vector<Move>& moves);
+    [[nodiscard]] bool pairedTeleportDestination(PlayerId id, HexCoord from, HexCoord& out) const;
     [[nodiscard]] std::vector<Move> integrateMotion(); // production: continuous glide
     [[nodiscard]] std::vector<Move> forcedCellMoves(); // tests: force one hex step
     // Fills `dead` with who fell this tick and `killer` with the player that
@@ -219,14 +231,10 @@ private:
     std::vector<Shooter> shooters_;                    // persistent laser items on the board
     std::vector<SlowTotem> slowTotems_;                // persistent slowing-field items
     std::vector<SpyDish> spyDishes_;                   // persistent minimap-reveal items
+    std::vector<TeleportPair> teleports_;              // persistent paired teleport endpoints
     std::mt19937 rng_;
     int totalCells_;
     std::vector<std::uint8_t> visited_; // flood-fill scratch, sized to the grid
-
-    float powerupAccum_ = 0.0F;
-    float powerupInterval_ = 0.0F;
-    int maxPowerups_ = 0;
-    int activePowerups_ = 0;
 };
 
 } // namespace og::hexanaut

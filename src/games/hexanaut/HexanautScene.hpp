@@ -70,7 +70,6 @@ private:
     void spawnCutFx(float dtSeconds);
     void updateParticles(float dtSeconds);
     void drawParticles(Canvas& canvas);
-    void drawPowerups(Canvas& canvas) const;
     // Spawn one fading laser bolt per new shooter capture (detected via each
     // shooter's shotCount), then age and cull the live bolts. Spawns only while
     // the sim is stepping; keeps fading afterward so bolts finish cleanly.
@@ -86,21 +85,23 @@ private:
     // Spy-dish items: a red-drum-plus-satellite-dish token for each one.
     void drawSpyDishes(Canvas& canvas) const;
     void drawSpyDish(Canvas& canvas, hexanaut::Vec2 worldCenter, int phase) const;
+    // Paired teleport items: endpoints are always visible; the white connection
+    // tube appears only while a pair is active for one owner.
+    void drawTeleports(Canvas& canvas) const;
+    void drawTeleportEndpoint(Canvas& canvas, hexanaut::Vec2 worldCenter, bool active,
+                              hexanaut::PlayerId owner, int phase) const;
+    void drawTeleportTube(Canvas& canvas, hexanaut::Vec2 from, hexanaut::Vec2 to,
+                          hexanaut::PlayerId owner) const;
     // Append one 6-pointed snowflake (3 crossed bars) into the shared mesh buffers.
     void appendSnowflake(float sx, float sy, float size, Color color);
     void drawAvatars(Canvas& canvas) const;
     void drawHud(Canvas& canvas) const;
     void drawLeaderboard(Canvas& canvas) const;
     void drawMinimap(Canvas& canvas);
-    // Draw the static-item markers (shooter / slow totem / spy dish) on the minimap.
-    // `spy` reveals each item's owner tint; otherwise only your own items are tinted.
+    // Draw the static-item markers on the minimap. `spy` reveals each item's
+    // owner tint; otherwise only your own items are tinted.
     void drawMinimapItems(Canvas& canvas, float boxX, float boxY, float cw, float ch, bool spy);
     void drawOverlay(Canvas& canvas) const;
-
-    struct PowerupDraw {
-        hexanaut::Vec2 center;
-        std::uint8_t type = 0;
-    };
 
     // An active-trail hex collected during drawField and stroked as a bright
     // owner-colored outline in drawTrailOutlines (the out-of-territory look). `lift`
@@ -163,7 +164,6 @@ private:
     // Reused geometry buffers so the whole field submits in one fillMesh call.
     std::vector<Canvas::Vertex> meshVerts_;
     std::vector<int> meshIdx_;
-    std::vector<PowerupDraw> powerupDraws_;   // power-up cells found during drawField
     std::vector<TrailOutline> trailOutlines_; // active-trail cells found during drawField
     std::vector<ScreenPos> ropeScratch_;      // reused per-player rope path in drawTrails
 
