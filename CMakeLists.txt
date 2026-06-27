@@ -85,6 +85,8 @@ add_library(engine STATIC
     src/games/hexanaut/HexBots.cpp
     src/games/hexanaut/HexWorld.cpp
     src/games/hexanaut/HexanautScene.cpp
+    src/games/hole/HoleWorld.cpp
+    src/games/hole/HoleScene.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
     src/scenes/SettingsScene.cpp)

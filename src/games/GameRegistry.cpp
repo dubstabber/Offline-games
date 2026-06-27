@@ -2,6 +2,7 @@
 
 #include "games/blockfill/BlockFillScene.hpp"
 #include "games/hexanaut/HexanautScene.hpp"
+#include "games/hole/HoleScene.hpp"
 #include "games/minesweeper/MineSweeperScene.hpp"
 #include "games/nibbles/NibblesScene.hpp"
 #include "games/snake/SnakeScene.hpp"
@@ -123,6 +124,17 @@ const std::vector<GameInfo>& gameRegistry() {
             .accent = colors::menuPink,
             .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
                 return std::make_unique<HexanautScene>(manager, difficulty);
+            },
+        });
+        list.push_back(GameInfo{
+            .id = "hole",
+            .title = "Hole",
+            .emoji = "\xE2\x9A\xAB", // ⚫
+            .description = "Steer a growing hole through the city. Swallow small props first, "
+                           "grow into cars and buildings, and clear the whole map.",
+            .accent = colors::botCyan,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<HoleScene>(manager, difficulty);
             },
         });
 

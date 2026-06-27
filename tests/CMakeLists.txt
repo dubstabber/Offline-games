@@ -66,3 +66,7 @@ add_test(NAME snake COMMAND test_snake)
 add_executable(test_hexanaut test_hexanaut.cpp)
 target_link_libraries(test_hexanaut PRIVATE engine)
 add_test(NAME hexanaut COMMAND test_hexanaut)
+
+add_executable(test_hole test_hole.cpp)
+target_link_libraries(test_hole PRIVATE engine)
+add_test(NAME hole COMMAND test_hole)

@@ -129,6 +129,24 @@ void testSnakeBest() {
     assert(back.snakeBestHard == 3333);
 }
 
+// Per-difficulty Hole best scores persist, floor at 0, and survive round-trips.
+void testHoleBest() {
+    assert(parse("holeBestEasy=120").holeBestEasy == 120);
+    assert(parse("holeBestMedium=4500").holeBestMedium == 4500);
+    assert(parse("holeBestHard=77").holeBestHard == 77);
+    assert(parse("holeBestEasy=-5").holeBestEasy == 0);
+    const Settings def;
+    assert(parse("holeBestHard=nope").holeBestHard == def.holeBestHard);
+    Settings s;
+    s.holeBestEasy = 11;
+    s.holeBestMedium = 222;
+    s.holeBestHard = 3333;
+    const Settings back = parse(serialize(s));
+    assert(back.holeBestEasy == 11);
+    assert(back.holeBestMedium == 222);
+    assert(back.holeBestHard == 3333);
+}
+
 // Per-difficulty Tap Match progress persists and is floored at level 1.
 void testTapmatchLevels() {
     assert(parse("tapmatchLevelEasy=7").tapmatchLevelEasy == 7);
@@ -176,6 +194,7 @@ int main() {
     testSokobanLevels();
     testNibblesLevels();
     testSnakeBest();
+    testHoleBest();
     std::puts("All Settings tests passed.");
     return 0;
 }

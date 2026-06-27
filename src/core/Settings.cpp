@@ -94,7 +94,7 @@ constexpr std::array<FloatField, 1> kFloatFields{{
 
 // Order here is also the on-disk serialize order, so it must not change without
 // matching serialize(). clampMin floors each field (levels at 1, scores at 0).
-constexpr std::array<IntField, 25> kIntFields{{
+constexpr std::array<IntField, 28> kIntFields{{
     {.key = "tapmatchLevelEasy", .member = &Settings::tapmatchLevelEasy, .clampMin = 1},
     {.key = "tapmatchLevelMedium", .member = &Settings::tapmatchLevelMedium, .clampMin = 1},
     {.key = "tapmatchLevelHard", .member = &Settings::tapmatchLevelHard, .clampMin = 1},
@@ -120,6 +120,9 @@ constexpr std::array<IntField, 25> kIntFields{{
     {.key = "hexanautBestEasy", .member = &Settings::hexanautBestEasy, .clampMin = 0},
     {.key = "hexanautBestMedium", .member = &Settings::hexanautBestMedium, .clampMin = 0},
     {.key = "hexanautBestHard", .member = &Settings::hexanautBestHard, .clampMin = 0},
+    {.key = "holeBestEasy", .member = &Settings::holeBestEasy, .clampMin = 0},
+    {.key = "holeBestMedium", .member = &Settings::holeBestMedium, .clampMin = 0},
+    {.key = "holeBestHard", .member = &Settings::holeBestHard, .clampMin = 0},
 }};
 
 // Apply one parsed key=value line to the matching field. Unknown keys are
