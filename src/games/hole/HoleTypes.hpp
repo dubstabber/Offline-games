@@ -55,17 +55,26 @@ struct Vec2 {
 
 enum class ObjectKind : std::uint8_t {
     Cone,
+    Mailbox,
+    FireHydrant,
     Pedestrian,
     TrashCan,
+    Streetlight,
     Bench,
     Tree,
+    Motorcycle,
     Stand,
     Car,
+    Pickup,
     Van,
+    Bus,
+    Fountain,
     Kiosk,
     SmallBuilding,
+    Office,
     Apartment,
     Tower,
+    Skyscraper,
 };
 
 struct CityObject {
@@ -90,11 +99,19 @@ struct PlayerInput {
     bool active = false;
 };
 
-struct HolePlayer {
+struct HoleActor {
     Vec2 pos;
     Vec2 vel;
     float score = 0.0F;
     float radius = 0.0F;
+    bool alive = true;
+    bool isBot = false;
+    float respawnTimer = 0.0F;
+    float graceTimer = 0.0F;
+    Vec2 botAim;
+    std::uint8_t colorIndex = 0;
 };
+
+using HolePlayer = HoleActor;
 
 } // namespace og::hole

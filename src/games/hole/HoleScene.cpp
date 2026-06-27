@@ -36,7 +36,7 @@ constexpr float kBackRadius = 56.0F;
 constexpr float kButtonRowY = 820.0F;
 
 constexpr float kBaseZoom = 1.14F;
-constexpr float kMinZoom = 0.42F;
+constexpr float kMinZoom = 0.38F;
 constexpr float kMaxZoom = 1.22F;
 constexpr float kZoomExp = 0.45F;
 constexpr float kZoomRate = 3.4F;
@@ -44,7 +44,6 @@ constexpr float kFollowRate = 10.0F;
 
 constexpr float kRoadW = 260.0F;
 constexpr float kRoadHalf = kRoadW * 0.5F;
-constexpr std::array<float, 3> kRoads{900.0F, 1800.0F, 2700.0F};
 
 constexpr Color kOutside = rgb(126, 136, 145);
 constexpr Color kSidewalk = rgb(185, 193, 202);
@@ -59,6 +58,17 @@ constexpr Color kHoleRing = rgb(31, 168, 226, 220);
 constexpr Color kHudPanel = rgb(16, 18, 24, 210);
 constexpr Color kHudText = rgb(244, 247, 252);
 constexpr Color kHudMuted = rgb(174, 185, 196);
+
+constexpr std::array<Color, 8> kBotRings{{
+    rgb(255, 198, 76),
+    rgb(255, 105, 97),
+    rgb(91, 212, 135),
+    rgb(195, 133, 255),
+    rgb(255, 142, 65),
+    rgb(98, 226, 214),
+    rgb(232, 114, 170),
+    rgb(164, 218, 78),
+}};
 
 [[nodiscard]] int difficultyToIndex(Difficulty difficulty) {
     switch (difficulty) {
@@ -84,6 +94,17 @@ constexpr Color kHudMuted = rgb(174, 185, 196);
         break;
     }
     return s.holeBestMedium;
+}
+
+[[nodiscard]] Color botRing(std::size_t index) {
+    return kBotRings.at((index - 1U) % kBotRings.size());
+}
+
+[[nodiscard]] std::string formatTime(float seconds) {
+    const int total = std::max(0, static_cast<int>(std::ceil(seconds)));
+    const int minutes = total / 60;
+    const int secs = total % 60;
+    return std::to_string(minutes) + ":" + (secs < 10 ? "0" : "") + std::to_string(secs);
 }
 
 void fillOrientedBox(Canvas& canvas, float cx, float cy, float ux, float uy, float halfLen,
@@ -152,7 +173,7 @@ void HoleScene::handleInput(const PointerEvent& event) {
     if (backButton_.handleInput(event)) {
         return;
     }
-    if (phase_ == Phase::Complete) {
+    if (phase_ == Phase::Finished) {
         overlay_.handleInput(event);
         return;
     }
@@ -170,19 +191,27 @@ void HoleScene::update(float dtSeconds) {
         };
         world_.setPlayerInput(input);
         advanceFixed(accum_, dtSeconds, cfg::kFixedDt, cfg::kMaxAccumDt, [this] { world_.step(); });
-        if (world_.completed()) {
-            enterComplete();
+        if (world_.finished()) {
+            enterFinished();
         }
     }
     updateCamera(dtSeconds);
 }
 
-void HoleScene::enterComplete() {
+void HoleScene::enterFinished() {
     if (recorded_) {
         return;
     }
-    phase_ = Phase::Complete;
+    phase_ = Phase::Finished;
     finalScore_ = world_.playerScore();
+    finalRank_ = world_.playerRank();
+    if (!world_.playerAlive()) {
+        resultTitle_ = "EATEN";
+    } else if (world_.completed()) {
+        resultTitle_ = "CITY CLEAR";
+    } else {
+        resultTitle_ = "TIME UP";
+    }
     bestScore_ = std::max(bestScore_, finalScore_);
     Settings& s = settings();
     holeBestField(s, difficulty_) = bestScore_;
@@ -226,35 +255,48 @@ void HoleScene::drawWorldRect(Canvas& canvas, float x, float y, float w, float h
 
 void HoleScene::drawCityBase(Canvas& canvas) const {
     canvas.clear(kOutside);
-    drawWorldRect(canvas, 0.0F, 0.0F, hole::HoleWorld::worldW(), hole::HoleWorld::worldH(),
-                  kSidewalk);
+    drawWorldRect(canvas, 0.0F, 0.0F, world_.worldW(), world_.worldH(), kSidewalk);
 
-    const std::array<float, 4> starts{35.0F, 1030.0F, 1930.0F, 2830.0F};
-    const std::array<float, 4> sizes{735.0F, 640.0F, 640.0F, 735.0F};
-    for (std::size_t ix = 0; ix < starts.size(); ++ix) {
-        for (std::size_t iy = 0; iy < starts.size(); ++iy) {
-            drawWorldRect(canvas, starts.at(ix), starts.at(iy), sizes.at(ix), sizes.at(iy), kBlock);
+    const int districts = world_.districtCount();
+    const float cellW = world_.worldW() / static_cast<float>(districts);
+    const float cellH = world_.worldH() / static_cast<float>(districts);
+    constexpr float kOuterPad = 35.0F;
+    for (int ix = 0; ix < districts; ++ix) {
+        const float x0 = ix == 0 ? kOuterPad : (static_cast<float>(ix) * cellW) + kRoadHalf;
+        const float x1 = ix == districts - 1 ? world_.worldW() - kOuterPad
+                                             : (static_cast<float>(ix + 1) * cellW) - kRoadHalf;
+        for (int iy = 0; iy < districts; ++iy) {
+            const float y0 = iy == 0 ? kOuterPad : (static_cast<float>(iy) * cellH) + kRoadHalf;
+            const float y1 = iy == districts - 1 ? world_.worldH() - kOuterPad
+                                                 : (static_cast<float>(iy + 1) * cellH) - kRoadHalf;
+            drawWorldRect(canvas, x0, y0, std::max(1.0F, x1 - x0), std::max(1.0F, y1 - y0), kBlock);
         }
     }
 
-    for (const float road : kRoads) {
-        drawWorldRect(canvas, road - kRoadHalf, 0.0F, kRoadW, hole::HoleWorld::worldH(), kRoad);
-        drawWorldRect(canvas, 0.0F, road - kRoadHalf, hole::HoleWorld::worldW(), kRoadW, kRoad);
+    for (int i = 1; i < districts; ++i) {
+        const float roadX = static_cast<float>(i) * cellW;
+        const float roadY = static_cast<float>(i) * cellH;
+        drawWorldRect(canvas, roadX - kRoadHalf, 0.0F, kRoadW, world_.worldH(), kRoad);
+        drawWorldRect(canvas, 0.0F, roadY - kRoadHalf, world_.worldW(), kRoadW, kRoad);
     }
 
     // Lane markers.
-    for (const float road : kRoads) {
-        const ScreenPos h0 = toScreen({0.0F, road});
-        const ScreenPos h1 = toScreen({hole::HoleWorld::worldW(), road});
+    for (int i = 1; i < districts; ++i) {
+        const float roadX = static_cast<float>(i) * cellW;
+        const float roadY = static_cast<float>(i) * cellH;
+        const ScreenPos h0 = toScreen({0.0F, roadY});
+        const ScreenPos h1 = toScreen({world_.worldW(), roadY});
         canvas.line(h0.x, h0.y, h1.x, h1.y, std::max(2.0F, 4.0F * zoom_), kRoadLine);
-        const ScreenPos v0 = toScreen({road, 0.0F});
-        const ScreenPos v1 = toScreen({road, hole::HoleWorld::worldH()});
+        const ScreenPos v0 = toScreen({roadX, 0.0F});
+        const ScreenPos v1 = toScreen({roadX, world_.worldH()});
         canvas.line(v0.x, v0.y, v1.x, v1.y, std::max(2.0F, 4.0F * zoom_), kRoadLine);
     }
 
     // Crosswalk stripes at every intersection.
-    for (const float rx : kRoads) {
-        for (const float ry : kRoads) {
+    for (int ix = 1; ix < districts; ++ix) {
+        for (int iy = 1; iy < districts; ++iy) {
+            const float rx = static_cast<float>(ix) * cellW;
+            const float ry = static_cast<float>(iy) * cellH;
             for (int i = 0; i < 5; ++i) {
                 const float off = -80.0F + (static_cast<float>(i) * 40.0F);
                 drawWorldRect(canvas, rx - 112.0F, ry + off - 8.0F, 224.0F, 16.0F, kCrosswalk);
@@ -264,9 +306,9 @@ void HoleScene::drawCityBase(Canvas& canvas) const {
     }
 
     const ScreenPos a = toScreen({0.0F, 0.0F});
-    const ScreenPos b = toScreen({hole::HoleWorld::worldW(), 0.0F});
-    const ScreenPos c = toScreen({hole::HoleWorld::worldW(), hole::HoleWorld::worldH()});
-    const ScreenPos d = toScreen({0.0F, hole::HoleWorld::worldH()});
+    const ScreenPos b = toScreen({world_.worldW(), 0.0F});
+    const ScreenPos c = toScreen({world_.worldW(), world_.worldH()});
+    const ScreenPos d = toScreen({0.0F, world_.worldH()});
     const float thick = std::max(3.0F, 8.0F * zoom_);
     canvas.line(a.x, a.y, b.x, b.y, thick, rgb(90, 98, 108));
     canvas.line(b.x, b.y, c.x, c.y, thick, rgb(90, 98, 108));
@@ -311,6 +353,21 @@ void HoleScene::drawObject(Canvas& canvas, const CityObject& object) const {
                     std::max(2.0F, r * 0.18F), colors::white);
         break;
     }
+    case ObjectKind::Mailbox:
+        canvas.fillRoundedRect(sp.x - (r * 0.78F), sp.y - (r * 0.45F), r * 1.56F, r * 0.9F,
+                               r * 0.20F, rgb(43, 112, 188));
+        canvas.fillRect(sp.x - (r * 0.18F), sp.y + (r * 0.42F), r * 0.36F, r * 0.85F,
+                        rgb(54, 70, 82));
+        canvas.fillRect(sp.x + (r * 0.52F), sp.y - (r * 0.72F), r * 0.58F, r * 0.22F,
+                        rgb(224, 63, 62));
+        break;
+    case ObjectKind::FireHydrant:
+        canvas.fillRoundedRect(sp.x - (r * 0.42F), sp.y - (r * 0.82F), r * 0.84F, r * 1.64F,
+                               r * 0.20F, rgb(222, 62, 49));
+        canvas.fillCircle(sp.x, sp.y - (r * 0.86F), r * 0.42F, rgb(244, 88, 62));
+        canvas.line(sp.x - (r * 0.76F), sp.y - (r * 0.12F), sp.x + (r * 0.76F), sp.y - (r * 0.12F),
+                    std::max(2.0F, r * 0.26F), rgb(188, 48, 42));
+        break;
     case ObjectKind::Pedestrian:
         canvas.fillCircle(sp.x, sp.y + (r * 0.22F), r * 0.68F, rgb(70, 115, 210));
         canvas.fillCircle(sp.x, sp.y - (r * 0.52F), r * 0.42F, rgb(242, 190, 135));
@@ -324,6 +381,12 @@ void HoleScene::drawObject(Canvas& canvas, const CityObject& object) const {
                     std::max(2.0F, r * 0.08F), rgb(35, 96, 72));
         canvas.line(sp.x + (r * 0.36F), sp.y - (r * 0.52F), sp.x + (r * 0.36F), sp.y + (r * 0.62F),
                     std::max(2.0F, r * 0.08F), rgb(35, 96, 72));
+        break;
+    case ObjectKind::Streetlight:
+        canvas.line(sp.x, sp.y + (r * 1.12F), sp.x, sp.y - (r * 1.05F), std::max(2.0F, r * 0.18F),
+                    rgb(76, 84, 92));
+        canvas.fillCircle(sp.x, sp.y - (r * 1.12F), r * 0.46F, rgb(255, 226, 122));
+        canvas.fillCircle(sp.x, sp.y - (r * 1.12F), r * 0.24F, rgb(255, 248, 190));
         break;
     case ObjectKind::Bench:
         canvas.fillRoundedRect(sp.x - (r * 1.05F), sp.y - (r * 0.38F), r * 2.1F, r * 0.76F,
@@ -349,14 +412,26 @@ void HoleScene::drawObject(Canvas& canvas, const CityObject& object) const {
         canvas.fillRect(sp.x + (r * 0.36F), sp.y - (r * 0.95F), r * 0.36F, r * 0.55F,
                         colors::white);
         break;
+    case ObjectKind::Fountain:
+        canvas.fillCircle(sp.x, sp.y, r * 1.06F, rgb(155, 164, 172));
+        canvas.fillCircle(sp.x, sp.y, r * 0.76F, rgb(68, 176, 220));
+        canvas.fillCircle(sp.x, sp.y, r * 0.34F, rgb(222, 236, 236));
+        canvas.line(sp.x - (r * 0.45F), sp.y, sp.x + (r * 0.45F), sp.y, std::max(2.0F, r * 0.08F),
+                    rgb(218, 244, 252));
+        break;
+    case ObjectKind::Motorcycle:
     case ObjectKind::Car:
+    case ObjectKind::Pickup:
     case ObjectKind::Van:
+    case ObjectKind::Bus:
         drawVehicle(canvas, object, sp, r);
         break;
     case ObjectKind::Kiosk:
     case ObjectKind::SmallBuilding:
+    case ObjectKind::Office:
     case ObjectKind::Apartment:
     case ObjectKind::Tower:
+    case ObjectKind::Skyscraper:
         drawBuilding(canvas, object, sp, r);
         break;
     }
@@ -377,6 +452,13 @@ void HoleScene::drawBuilding(Canvas& canvas, const CityObject& object, ScreenPos
         trim = rgb(138, 72, 62);
         cols = 3;
         rows = 3;
+    } else if (object.kind == ObjectKind::Office) {
+        w = r * 2.25F;
+        h = r * 2.10F;
+        roof = rgb(126, 151, 166);
+        trim = rgb(76, 96, 118);
+        cols = 4;
+        rows = 4;
     } else if (object.kind == ObjectKind::Apartment) {
         w = r * 2.25F;
         h = r * 2.2F;
@@ -391,6 +473,13 @@ void HoleScene::drawBuilding(Canvas& canvas, const CityObject& object, ScreenPos
         trim = rgb(50, 70, 95);
         cols = 5;
         rows = 5;
+    } else if (object.kind == ObjectKind::Skyscraper) {
+        w = r * 2.58F;
+        h = r * 2.62F;
+        roof = rgb(92, 130, 156);
+        trim = rgb(42, 63, 92);
+        cols = 6;
+        rows = 6;
     }
 
     canvas.fillRoundedRect(sp.x - (w * 0.5F) + (8.0F * zoom_), sp.y - (h * 0.5F) + (10.0F * zoom_),
@@ -416,11 +505,39 @@ void HoleScene::drawVehicle(Canvas& canvas, const CityObject& object, ScreenPos 
     const Vec2 dir = vehicleDir(object);
     const float ux = dir.x;
     const float uy = dir.y;
-    const bool van = object.kind == ObjectKind::Van;
-    const float halfLen = r * (van ? 1.34F : 1.10F);
-    const float halfWid = r * (van ? 0.58F : 0.48F);
-    const Color body = van ? rgb(230, 230, 218) : rgb(226, 82, 76);
-    const Color nose = van ? rgb(94, 150, 190) : rgb(245, 178, 64);
+    if (object.kind == ObjectKind::Motorcycle) {
+        fillOrientedBox(canvas, sp.x + (4.0F * zoom_), sp.y + (5.0F * zoom_), ux, uy, r * 1.0F,
+                        r * 0.32F, kShadow);
+        canvas.fillCircle(sp.x - (ux * r * 0.76F), sp.y - (uy * r * 0.76F), r * 0.36F,
+                          rgb(30, 34, 42));
+        canvas.fillCircle(sp.x + (ux * r * 0.76F), sp.y + (uy * r * 0.76F), r * 0.36F,
+                          rgb(30, 34, 42));
+        canvas.line(sp.x - (ux * r * 0.72F), sp.y - (uy * r * 0.72F), sp.x + (ux * r * 0.72F),
+                    sp.y + (uy * r * 0.72F), std::max(2.0F, r * 0.24F), rgb(242, 188, 52));
+        canvas.fillCircle(sp.x, sp.y, r * 0.28F, rgb(76, 126, 218));
+        return;
+    }
+
+    float halfLen = r * 1.10F;
+    float halfWid = r * 0.48F;
+    Color body = rgb(226, 82, 76);
+    Color nose = rgb(245, 178, 64);
+    if (object.kind == ObjectKind::Pickup) {
+        halfLen = r * 1.24F;
+        halfWid = r * 0.52F;
+        body = rgb(65, 144, 208);
+        nose = rgb(228, 230, 206);
+    } else if (object.kind == ObjectKind::Van) {
+        halfLen = r * 1.34F;
+        halfWid = r * 0.58F;
+        body = rgb(230, 230, 218);
+        nose = rgb(94, 150, 190);
+    } else if (object.kind == ObjectKind::Bus) {
+        halfLen = r * 1.60F;
+        halfWid = r * 0.62F;
+        body = rgb(238, 198, 62);
+        nose = rgb(56, 129, 188);
+    }
     fillOrientedBox(canvas, sp.x + (5.0F * zoom_), sp.y + (6.0F * zoom_), ux, uy, halfLen, halfWid,
                     kShadow);
     fillOrientedBox(canvas, sp.x, sp.y, ux, uy, halfLen, halfWid, body);
@@ -430,21 +547,40 @@ void HoleScene::drawVehicle(Canvas& canvas, const CityObject& object, ScreenPos 
                     halfLen * 0.12F, halfWid * 0.92F, nose);
 }
 
-void HoleScene::drawHole(Canvas& canvas) const {
-    const hole::HolePlayer& p = world_.player();
-    const ScreenPos sp = toScreen(p.pos);
-    const float r = p.radius * zoom_;
+void HoleScene::drawHoles(Canvas& canvas) const {
+    for (std::size_t i = 1; i < world_.holes().size(); ++i) {
+        drawHole(canvas, world_.holes().at(i), botRing(i), false, i);
+    }
+    drawHole(canvas, world_.player(), kHoleRing, true, 0);
+}
+
+void HoleScene::drawHole(Canvas& canvas, const hole::HolePlayer& hole, Color ring, bool isPlayer,
+                         std::size_t index) const {
+    if (!hole.alive) {
+        return;
+    }
+    const ScreenPos sp = toScreen(hole.pos);
+    const float r = hole.radius * zoom_;
+    if (!onScreen(sp.x, sp.y, r * 1.7F)) {
+        return;
+    }
     canvas.fillCircle(sp.x + (6.0F * zoom_), sp.y + (8.0F * zoom_), r * 1.04F, kShadow);
-    canvas.fillCircle(sp.x, sp.y, r + std::max(4.0F, 8.0F * zoom_), kHoleRing);
+    canvas.fillCircle(sp.x, sp.y, r + std::max(4.0F, 8.0F * zoom_), ring);
     canvas.fillCircle(sp.x, sp.y, r, kHoleBlack);
     canvas.fillCircle(sp.x, sp.y, r * 0.62F, kHoleInner);
+    if (!isPlayer && r > 10.0F) {
+        const std::string label =
+            "B" + std::to_string(index) + " " + std::to_string(static_cast<int>(hole.score));
+        canvas.textCentered(label, sp.x, sp.y - r - (18.0F * zoom_), std::max(13.0F, 18.0F * zoom_),
+                            ring);
+    }
 }
 
 void HoleScene::drawHud(Canvas& canvas) const {
     backButton_.render(canvas);
 
-    constexpr float kPanelW = 330.0F;
-    constexpr float kPanelH = 124.0F;
+    constexpr float kPanelW = 390.0F;
+    constexpr float kPanelH = 150.0F;
     constexpr float kPanelX = (layout::kWidthF - kPanelW) * 0.5F;
     constexpr float kPanelY = 36.0F;
     canvas.fillRoundedRect(kPanelX, kPanelY, kPanelW, kPanelH, 18.0F, kHudPanel);
@@ -453,8 +589,10 @@ void HoleScene::drawHud(Canvas& canvas) const {
     canvas.textCentered(std::to_string(world_.playerScore()), layout::kWidthF * 0.5F,
                         kPanelY + 68.0F, 50.0F, kHudText);
     const int pct = static_cast<int>(std::lround(world_.completionPercent()));
-    canvas.textCentered("CLEAR " + std::to_string(pct) + "%", layout::kWidthF * 0.5F,
-                        kPanelY + 108.0F, 24.0F, kHudMuted);
+    canvas.textCentered("TIME " + formatTime(world_.timeRemaining()) + "   #" +
+                            std::to_string(world_.playerRank()) + "   CLEAR " +
+                            std::to_string(pct) + "%",
+                        layout::kWidthF * 0.5F, kPanelY + 112.0F, 23.0F, kHudMuted);
 
     canvas.text("BEST", layout::kWidthF - 28.0F, 54.0F, 22.0F, kHudMuted, Canvas::Align::Right);
     canvas.text(std::to_string(bestScore_), layout::kWidthF - 28.0F, 84.0F, 30.0F, kHudText,
@@ -462,19 +600,21 @@ void HoleScene::drawHud(Canvas& canvas) const {
 }
 
 void HoleScene::drawOverlay(Canvas& canvas) const {
-    overlay_.render(canvas, "CITY CLEAR", 520.0F, 78.0F);
+    overlay_.render(canvas, resultTitle_, 500.0F, 76.0F);
     canvas.textCentered("SCORE  " + std::to_string(finalScore_), layout::kWidthF / 2.0F, 632.0F,
                         44.0F, colors::white);
-    canvas.textCentered("BEST  " + std::to_string(bestScore_), layout::kWidthF / 2.0F, 692.0F,
+    canvas.textCentered("RANK  #" + std::to_string(finalRank_), layout::kWidthF / 2.0F, 692.0F,
+                        34.0F, colors::white);
+    canvas.textCentered("BEST  " + std::to_string(bestScore_), layout::kWidthF / 2.0F, 748.0F,
                         34.0F, colors::botCyan);
 }
 
 void HoleScene::render(Canvas& canvas) {
     drawCityBase(canvas);
     drawObjects(canvas);
-    drawHole(canvas);
+    drawHoles(canvas);
     drawHud(canvas);
-    if (phase_ == Phase::Complete) {
+    if (phase_ == Phase::Finished) {
         drawOverlay(canvas);
     }
 }

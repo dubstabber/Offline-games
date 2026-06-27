@@ -130,8 +130,9 @@ const std::vector<GameInfo>& gameRegistry() {
             .id = "hole",
             .title = "Hole",
             .emoji = "\xE2\x9A\xAB", // ⚫
-            .description = "Steer a growing hole through the city. Swallow small props first, "
-                           "grow into cars and buildings, and clear the whole map.",
+            .description = "Steer a growing hole through a timed city match. Swallow small props "
+                           "first, grow into cars and buildings, and eat rival holes before they "
+                           "outscore you.",
             .accent = colors::botCyan,
             .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
                 return std::make_unique<HoleScene>(manager, difficulty);

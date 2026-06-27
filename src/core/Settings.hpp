@@ -60,8 +60,9 @@ struct Settings {
     int hexanautBestEasy = 0;
     int hexanautBestMedium = 0;
     int hexanautBestHard = 0;
-    // Hole best score per difficulty (highest consumed city mass). Shown on the
-    // completion overlay; each difficulty tracks separately.
+    // Hole best competitive score per difficulty (highest city/rival mass in a
+    // timed round). Shown on the result overlay; each difficulty tracks
+    // separately.
     int holeBestEasy = 0;
     int holeBestMedium = 0;
     int holeBestHard = 0;

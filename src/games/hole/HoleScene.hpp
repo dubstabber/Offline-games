@@ -7,16 +7,19 @@
 #include "ui/IconButton.hpp"
 #include "ui/ResultOverlay.hpp"
 
+#include <cstddef>
 #include <cstdint>
+#include <string>
 
 namespace og {
 
 class SceneManager;
 
-// A single-player Hole.io-style clearable city. The SDL-free HoleWorld owns
-// movement, growth, object blocking, and completion; this scene follows the
-// player with a zooming camera, turns drag input into world aims, and renders the
-// city from code-drawn roads, props, vehicles, buildings, and a layered hole.
+// A competitive Hole.io-style city. The SDL-free HoleWorld owns movement,
+// growth, bot holes, object blocking, rival eating, and timed completion; this
+// scene follows the player with a zooming camera, turns drag input into world
+// aims, and renders the city from code-drawn roads, props, vehicles, buildings,
+// and layered holes.
 class HoleScene : public Scene {
 public:
     HoleScene(SceneManager& manager, Difficulty difficulty);
@@ -26,7 +29,7 @@ public:
     void render(Canvas& canvas) override;
 
 private:
-    enum class Phase : std::uint8_t { Playing, Complete };
+    enum class Phase : std::uint8_t { Playing, Finished };
 
     struct ScreenPos {
         float x = 0.0F;
@@ -34,7 +37,7 @@ private:
     };
 
     void handleSteer(const PointerEvent& event);
-    void enterComplete();
+    void enterFinished();
     void updateCamera(float dtSeconds);
 
     [[nodiscard]] hole::Vec2 screenToWorld(float sx, float sy) const;
@@ -47,7 +50,9 @@ private:
     void drawObject(Canvas& canvas, const hole::CityObject& object) const;
     void drawBuilding(Canvas& canvas, const hole::CityObject& object, ScreenPos sp, float r) const;
     void drawVehicle(Canvas& canvas, const hole::CityObject& object, ScreenPos sp, float r) const;
-    void drawHole(Canvas& canvas) const;
+    void drawHoles(Canvas& canvas) const;
+    void drawHole(Canvas& canvas, const hole::HolePlayer& hole, Color ring, bool isPlayer,
+                  std::size_t index) const;
     void drawHud(Canvas& canvas) const;
     void drawOverlay(Canvas& canvas) const;
 
@@ -68,6 +73,8 @@ private:
     bool recorded_ = false;
     int finalScore_ = 0;
     int bestScore_ = 0;
+    int finalRank_ = 1;
+    std::string resultTitle_;
 
     ResultOverlay overlay_;
 };
