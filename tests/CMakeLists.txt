@@ -53,6 +53,12 @@ target_compile_definitions(test_sokoban PRIVATE
     SOKOBAN_LEVELS_PATH="${CMAKE_SOURCE_DIR}/assets/sokoban/levels.bytes")
 add_test(NAME sokoban COMMAND test_sokoban)
 
+add_executable(test_nibbles test_nibbles.cpp)
+target_link_libraries(test_nibbles PRIVATE engine)
+target_compile_definitions(test_nibbles PRIVATE
+    NIBBLES_LEVELS_PATH="${CMAKE_SOURCE_DIR}/assets/nibbles/levels.bytes")
+add_test(NAME nibbles COMMAND test_nibbles)
+
 add_executable(test_snake test_snake.cpp)
 target_link_libraries(test_snake PRIVATE engine)
 add_test(NAME snake COMMAND test_snake)

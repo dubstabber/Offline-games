@@ -29,6 +29,9 @@ void testRoundTripDefaults() {
     assert(back.sokobanLevelEasy == def.sokobanLevelEasy);
     assert(back.sokobanLevelMedium == def.sokobanLevelMedium);
     assert(back.sokobanLevelHard == def.sokobanLevelHard);
+    assert(back.nibblesLevelEasy == def.nibblesLevelEasy);
+    assert(back.nibblesLevelMedium == def.nibblesLevelMedium);
+    assert(back.nibblesLevelHard == def.nibblesLevelHard);
 }
 
 // Custom values survive the round-trip too (volume to 2 decimals).
@@ -45,6 +48,9 @@ void testRoundTripCustom() {
     s.sokobanLevelEasy = 9;
     s.sokobanLevelMedium = 17;
     s.sokobanLevelHard = 5;
+    s.nibblesLevelEasy = 4;
+    s.nibblesLevelMedium = 15;
+    s.nibblesLevelHard = 26;
     const Settings back = parse(serialize(s));
     assert(back.darkMode);
     assert(nearly(back.volume, 0.35F));
@@ -57,6 +63,9 @@ void testRoundTripCustom() {
     assert(back.sokobanLevelEasy == 9);
     assert(back.sokobanLevelMedium == 17);
     assert(back.sokobanLevelHard == 5);
+    assert(back.nibblesLevelEasy == 4);
+    assert(back.nibblesLevelMedium == 15);
+    assert(back.nibblesLevelHard == 26);
 }
 
 // Empty or whitespace-only input yields the defaults.
@@ -142,6 +151,17 @@ void testSokobanLevels() {
     assert(parse("sokobanLevelMedium=oops").sokobanLevelMedium == def.sokobanLevelMedium);
 }
 
+// Per-difficulty Nibbles progress persists and is floored at level 1.
+void testNibblesLevels() {
+    assert(parse("nibblesLevelEasy=7").nibblesLevelEasy == 7);
+    assert(parse("nibblesLevelMedium=12").nibblesLevelMedium == 12);
+    assert(parse("nibblesLevelHard=26").nibblesLevelHard == 26);
+    assert(parse("nibblesLevelEasy=0").nibblesLevelEasy == 1);
+    assert(parse("nibblesLevelHard=-9").nibblesLevelHard == 1);
+    const Settings def;
+    assert(parse("nibblesLevelMedium=oops").nibblesLevelMedium == def.nibblesLevelMedium);
+}
+
 } // namespace
 
 int main() {
@@ -154,6 +174,7 @@ int main() {
     testMalformedValueKeepsDefault();
     testTapmatchLevels();
     testSokobanLevels();
+    testNibblesLevels();
     testSnakeBest();
     std::puts("All Settings tests passed.");
     return 0;

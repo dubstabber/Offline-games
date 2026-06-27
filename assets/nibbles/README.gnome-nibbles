@@ -1,0 +1,18 @@
+GNOME Nibbles level data
+========================
+
+assets/nibbles/levels.bytes is generated from the GNOME Nibbles .gnl level
+files in gnome-nibbles-master/data/levels using:
+
+    tools/extract_nibbles_levels.py
+
+The source game is GNOME Nibbles:
+
+    https://gitlab.gnome.org/GNOME/gnome-nibbles
+
+GNOME Nibbles is free software under the GNU General Public License, version 3
+or later. This port imports the level layouts and implements gameplay behavior
+derived from GNOME Nibbles, but it does not import GNOME image, SVG, sound, GTK,
+or UI assets. Rendering in offline-games remains code-drawn shapes and text.
+
+See COPYING.GPL-3 for the GPL-3 license text.

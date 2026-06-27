@@ -105,4 +105,8 @@ return to the menu.
 
 ## License
 
-TBD.
+TBD for original offline-games code.
+
+Imported level data and gameplay behavior for **Nibbles** are derived from
+GNOME Nibbles and are GPL-3-or-later; see `assets/nibbles/README.gnome-nibbles`
+and `assets/nibbles/COPYING.GPL-3`.

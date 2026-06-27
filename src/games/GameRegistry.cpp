@@ -3,6 +3,7 @@
 #include "games/blockfill/BlockFillScene.hpp"
 #include "games/hexanaut/HexanautScene.hpp"
 #include "games/minesweeper/MineSweeperScene.hpp"
+#include "games/nibbles/NibblesScene.hpp"
 #include "games/snake/SnakeScene.hpp"
 #include "games/sokoban/SokobanScene.hpp"
 #include "games/tapmatch/TapMatchScene.hpp"
@@ -84,6 +85,19 @@ const std::vector<GameInfo>& gameRegistry() {
                                                       sokobanSavedLevel(difficulty));
             },
             .currentLevel = [](Difficulty difficulty) { return sokobanSavedLevel(difficulty); },
+        });
+        list.push_back(GameInfo{
+            .id = "nibbles",
+            .title = "Nibbles",
+            .emoji = "\xF0\x9F\x8D\x92", // 🍒
+            .description = "Guide your worm through maze boards, collect every bonus, and avoid "
+                           "walls, warps, and rival worms. Swipe or use the arrows to turn.",
+            .accent = colors::easyGreen,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<NibblesScene>(manager, difficulty,
+                                                      nibblesSavedLevel(difficulty));
+            },
+            .currentLevel = [](Difficulty difficulty) { return nibblesSavedLevel(difficulty); },
         });
         list.push_back(GameInfo{
             .id = "snake",

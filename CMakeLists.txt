@@ -75,6 +75,9 @@ add_library(engine STATIC
     src/games/sokoban/SokobanBoard.cpp
     src/games/sokoban/SokobanLevels.cpp
     src/games/sokoban/SokobanScene.cpp
+    src/games/nibbles/NibblesLevels.cpp
+    src/games/nibbles/NibblesWorld.cpp
+    src/games/nibbles/NibblesScene.cpp
     src/games/snake/SnakeWorld.cpp
     src/games/snake/GhostLeaderboard.cpp
     src/games/snake/SnakeScene.cpp
@@ -129,6 +132,15 @@ add_custom_command(TARGET offline-games POST_BUILD
             "${CMAKE_SOURCE_DIR}/assets/sokoban"
             "$<TARGET_FILE_DIR:offline-games>/assets/sokoban"
     COMMENT "Bundling Sokoban levels next to the executable")
+
+# Ship the GNOME Nibbles level data as a compact binary blob generated from the
+# original .gnl text boards (see tools/extract_nibbles_levels.py). Data, not
+# images, so the "no image assets" rule does not apply.
+add_custom_command(TARGET offline-games POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/assets/nibbles"
+            "$<TARGET_FILE_DIR:offline-games>/assets/nibbles"
+    COMMENT "Bundling Nibbles levels next to the executable")
 
 # ---- Tests -------------------------------------------------------------------
 include(CTest)

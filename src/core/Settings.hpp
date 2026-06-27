@@ -36,6 +36,11 @@ struct Settings {
     int sokobanLevelEasy = 1;
     int sokobanLevelMedium = 1;
     int sokobanLevelHard = 1;
+    // Nibbles progress: the current GNOME Nibbles board (1-based) reached in
+    // each difficulty. Clearing level 26 wraps the saved level back to 1.
+    int nibblesLevelEasy = 1;
+    int nibblesLevelMedium = 1;
+    int nibblesLevelHard = 1;
     // Minesweeper win streaks per difficulty: the current run (reset to 0 on a
     // loss) and the all-time best. Shown in the in-game CURRENT STREAK / ALL TIME
     // panels; each difficulty tracks separately.
