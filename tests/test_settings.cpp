@@ -26,6 +26,9 @@ void testRoundTripDefaults() {
     assert(back.tapmatchLevelEasy == def.tapmatchLevelEasy);
     assert(back.tapmatchLevelMedium == def.tapmatchLevelMedium);
     assert(back.tapmatchLevelHard == def.tapmatchLevelHard);
+    assert(back.sokobanLevelEasy == def.sokobanLevelEasy);
+    assert(back.sokobanLevelMedium == def.sokobanLevelMedium);
+    assert(back.sokobanLevelHard == def.sokobanLevelHard);
 }
 
 // Custom values survive the round-trip too (volume to 2 decimals).
@@ -39,6 +42,9 @@ void testRoundTripCustom() {
     s.tapmatchLevelEasy = 7;
     s.tapmatchLevelMedium = 42;
     s.tapmatchLevelHard = 3;
+    s.sokobanLevelEasy = 9;
+    s.sokobanLevelMedium = 17;
+    s.sokobanLevelHard = 5;
     const Settings back = parse(serialize(s));
     assert(back.darkMode);
     assert(nearly(back.volume, 0.35F));
@@ -48,6 +54,9 @@ void testRoundTripCustom() {
     assert(back.tapmatchLevelEasy == 7);
     assert(back.tapmatchLevelMedium == 42);
     assert(back.tapmatchLevelHard == 3);
+    assert(back.sokobanLevelEasy == 9);
+    assert(back.sokobanLevelMedium == 17);
+    assert(back.sokobanLevelHard == 5);
 }
 
 // Empty or whitespace-only input yields the defaults.
@@ -122,6 +131,17 @@ void testTapmatchLevels() {
     assert(parse("tapmatchLevelMedium=oops").tapmatchLevelMedium == def.tapmatchLevelMedium);
 }
 
+// Per-difficulty Sokoban progress persists and is floored at level 1.
+void testSokobanLevels() {
+    assert(parse("sokobanLevelEasy=7").sokobanLevelEasy == 7);
+    assert(parse("sokobanLevelMedium=12").sokobanLevelMedium == 12);
+    assert(parse("sokobanLevelHard=3").sokobanLevelHard == 3);
+    assert(parse("sokobanLevelEasy=0").sokobanLevelEasy == 1);
+    assert(parse("sokobanLevelHard=-9").sokobanLevelHard == 1);
+    const Settings def;
+    assert(parse("sokobanLevelMedium=oops").sokobanLevelMedium == def.sokobanLevelMedium);
+}
+
 } // namespace
 
 int main() {
@@ -133,6 +153,7 @@ int main() {
     testClampingAndSnapping();
     testMalformedValueKeepsDefault();
     testTapmatchLevels();
+    testSokobanLevels();
     testSnakeBest();
     std::puts("All Settings tests passed.");
     return 0;

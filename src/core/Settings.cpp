@@ -94,7 +94,7 @@ constexpr std::array<FloatField, 1> kFloatFields{{
 
 // Order here is also the on-disk serialize order, so it must not change without
 // matching serialize(). clampMin floors each field (levels at 1, scores at 0).
-constexpr std::array<IntField, 19> kIntFields{{
+constexpr std::array<IntField, 22> kIntFields{{
     {.key = "tapmatchLevelEasy", .member = &Settings::tapmatchLevelEasy, .clampMin = 1},
     {.key = "tapmatchLevelMedium", .member = &Settings::tapmatchLevelMedium, .clampMin = 1},
     {.key = "tapmatchLevelHard", .member = &Settings::tapmatchLevelHard, .clampMin = 1},
@@ -102,6 +102,9 @@ constexpr std::array<IntField, 19> kIntFields{{
     {.key = "blockfillLevelMedium", .member = &Settings::blockfillLevelMedium, .clampMin = 1},
     {.key = "blockfillLevelHard", .member = &Settings::blockfillLevelHard, .clampMin = 1},
     {.key = "blockfillLevelVeryHard", .member = &Settings::blockfillLevelVeryHard, .clampMin = 1},
+    {.key = "sokobanLevelEasy", .member = &Settings::sokobanLevelEasy, .clampMin = 1},
+    {.key = "sokobanLevelMedium", .member = &Settings::sokobanLevelMedium, .clampMin = 1},
+    {.key = "sokobanLevelHard", .member = &Settings::sokobanLevelHard, .clampMin = 1},
     {.key = "minesweeperStreakEasy", .member = &Settings::minesweeperStreakEasy, .clampMin = 0},
     {.key = "minesweeperStreakMedium", .member = &Settings::minesweeperStreakMedium, .clampMin = 0},
     {.key = "minesweeperStreakHard", .member = &Settings::minesweeperStreakHard, .clampMin = 0},

@@ -31,6 +31,11 @@ struct Settings {
     int blockfillLevelMedium = 1;
     int blockfillLevelHard = 1;
     int blockfillLevelVeryHard = 1;
+    // Sokoban progress: the current level (1-based) reached in each difficulty
+    // tier. The tiers are built from the imported KSokoban/Sokobang level sets.
+    int sokobanLevelEasy = 1;
+    int sokobanLevelMedium = 1;
+    int sokobanLevelHard = 1;
     // Minesweeper win streaks per difficulty: the current run (reset to 0 on a
     // loss) and the all-time best. Shown in the in-game CURRENT STREAK / ALL TIME
     // panels; each difficulty tracks separately.

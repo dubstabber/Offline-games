@@ -72,6 +72,9 @@ add_library(engine STATIC
     src/games/blockfill/BlockFillBoard.cpp
     src/games/blockfill/BlockFillLevels.cpp
     src/games/blockfill/BlockFillScene.cpp
+    src/games/sokoban/SokobanBoard.cpp
+    src/games/sokoban/SokobanLevels.cpp
+    src/games/sokoban/SokobanScene.cpp
     src/games/snake/SnakeWorld.cpp
     src/games/snake/GhostLeaderboard.cpp
     src/games/snake/SnakeScene.cpp
@@ -117,6 +120,15 @@ add_custom_command(TARGET offline-games POST_BUILD
             "${CMAKE_SOURCE_DIR}/assets/blockfill"
             "$<TARGET_FILE_DIR:offline-games>/assets/blockfill"
     COMMENT "Bundling Block Fill levels next to the executable")
+
+# Ship the Sokoban level data the same way: a compact binary blob generated from
+# the Sokobang/KSokoban text levels (see tools/extract_sokoban_levels.py). Data,
+# not images, so the "no image assets" rule does not apply.
+add_custom_command(TARGET offline-games POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/assets/sokoban"
+            "$<TARGET_FILE_DIR:offline-games>/assets/sokoban"
+    COMMENT "Bundling Sokoban levels next to the executable")
 
 # ---- Tests -------------------------------------------------------------------
 include(CTest)

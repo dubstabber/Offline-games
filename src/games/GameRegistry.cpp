@@ -4,6 +4,7 @@
 #include "games/hexanaut/HexanautScene.hpp"
 #include "games/minesweeper/MineSweeperScene.hpp"
 #include "games/snake/SnakeScene.hpp"
+#include "games/sokoban/SokobanScene.hpp"
 #include "games/tapmatch/TapMatchScene.hpp"
 #include "games/tictactoe/TicTacToeScene.hpp"
 
@@ -70,6 +71,19 @@ const std::vector<GameInfo>& gameRegistry() {
                                                         blockFillSavedLevel(difficulty));
             },
             .currentLevel = [](Difficulty difficulty) { return blockFillSavedLevel(difficulty); },
+        });
+        list.push_back(GameInfo{
+            .id = "sokoban",
+            .title = "Sokoban",
+            .emoji = "\xF0\x9F\x93\xA6", // 📦
+            .description = "Push every crate onto a goal. Crates can only be pushed, never pulled; "
+                           "use undo when a box gets trapped.",
+            .accent = colors::mediumOrange,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<SokobanScene>(manager, difficulty,
+                                                      sokobanSavedLevel(difficulty));
+            },
+            .currentLevel = [](Difficulty difficulty) { return sokobanSavedLevel(difficulty); },
         });
         list.push_back(GameInfo{
             .id = "snake",
