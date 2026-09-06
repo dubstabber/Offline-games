@@ -8,6 +8,7 @@
 #include "games/nibbles/NibblesScene.hpp"
 #include "games/snake/SnakeScene.hpp"
 #include "games/sokoban/SokobanScene.hpp"
+#include "games/solitaire/SolitaireScene.hpp"
 #include "games/tapmatch/TapMatchScene.hpp"
 #include "games/tictactoe/TicTacToeScene.hpp"
 #include "games/twentyfortyeight/TwentyFortyEightScene.hpp"
@@ -167,6 +168,21 @@ const std::vector<GameInfo>& gameRegistry() {
             },
         });
 
+        list.push_back(GameInfo{
+            .id = "solitaire",
+            .title = "Solitaire",
+            .emoji = "\xF0\x9F\x83\x8F", // 🃏
+            .description = "Classic Klondike. Build each foundation from Ace to King. Stack "
+                           "columns down in alternating colors, tap the stock for more cards, "
+                           "and tap a card to send it where it fits. Every deal can be won: "
+                           "Easy turns one card at a time, Medium three, and Hard allows "
+                           "only three passes through the stock.",
+            .accent = colors::menuYellow,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<SolitaireScene>(manager, difficulty);
+            },
+        });
+
         // Placeholder cards for games not built yet: a title/emoji/accent so the
         // menu has something to show and scroll, but no `create` factory, so the
         // menu marks them "SOON" and they don't open. Implement one by giving it
@@ -180,11 +196,10 @@ const std::vector<GameInfo>& gameRegistry() {
                                     .accent = accent,
                                     .create = nullptr});
         };
-        placeholder("connect4", "Connect 4", "\xF0\x9F\x94\xB4", colors::menuPurple);  // 🔴
-        placeholder("solitaire", "Solitaire", "\xF0\x9F\x83\x8F", colors::menuYellow); // 🃏
-        placeholder("puzzle", "Puzzle", "\xF0\x9F\xA7\xA9", colors::easyGreen);        // 🧩
-        placeholder("dice", "Dice", "\xF0\x9F\x8E\xB2", colors::botCyan);              // 🎲
-        placeholder("pong", "Pong", "\xF0\x9F\x8F\x93", colors::hardRed);              // 🏓
+        placeholder("connect4", "Connect 4", "\xF0\x9F\x94\xB4", colors::menuPurple); // 🔴
+        placeholder("puzzle", "Puzzle", "\xF0\x9F\xA7\xA9", colors::easyGreen);       // 🧩
+        placeholder("dice", "Dice", "\xF0\x9F\x8E\xB2", colors::botCyan);             // 🎲
+        placeholder("pong", "Pong", "\xF0\x9F\x8F\x93", colors::hardRed);             // 🏓
 
         return list;
     }();

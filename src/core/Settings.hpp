@@ -71,6 +71,11 @@ struct Settings {
     int twentyFortyEightBestEasy = 0;
     int twentyFortyEightBestMedium = 0;
     int twentyFortyEightBestHard = 0;
+    // Solitaire best score per difficulty (highest score of a won deal). Shown on
+    // the result overlay; each difficulty tracks separately.
+    int solitaireBestEasy = 0;
+    int solitaireBestMedium = 0;
+    int solitaireBestHard = 0;
 };
 
 // Pure and SDL-free (so they are unit-testable): turn Settings into the on-disk

@@ -95,6 +95,7 @@ add_library(engine STATIC
     src/games/solitaire/KlondikeGame.cpp
     src/games/solitaire/KlondikeSolver.cpp
     src/games/solitaire/SolitaireDeals.cpp
+    src/games/solitaire/SolitaireScene.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
     src/scenes/SettingsScene.cpp)

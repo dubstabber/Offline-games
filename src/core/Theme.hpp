@@ -64,6 +64,13 @@ struct Theme {
     Color memCardBack;     // face-down card
     Color memCardBackRing; // the ring pattern on a face-down card
     Color memCardFace;     // face-up card (light, backs the emoji)
+
+    // Solitaire.
+    Color solTable;         // the felt
+    Color solSlot;          // empty pile outline (translucent over the felt)
+    Color solCardFace;      // face-up card (light, backs the black/red ink)
+    Color solCardBack;      // face-down card
+    Color solCardBackInner; // the frame pattern on a face-down card
 };
 
 // Light theme = the project's current colors (verbatim, so default builds look
@@ -116,6 +123,12 @@ inline constexpr Theme kLight{
     .memCardBack = rgb(40, 38, 52),      // the menu's card ink
     .memCardBackRing = rgb(92, 88, 118), // muted violet ring
     .memCardFace = rgb(252, 248, 240),   // warm white face
+
+    .solTable = rgb(38, 122, 74),           // classic green felt
+    .solSlot = rgb(255, 255, 255, 34),      // faint outline over the felt
+    .solCardFace = rgb(253, 253, 250),      // white card
+    .solCardBack = rgb(52, 84, 160),        // navy back
+    .solCardBackInner = rgb(120, 146, 208), // lighter frame on the back
 };
 
 // Dark theme: charcoal chrome with near-white text; each game keeps its hue
@@ -168,6 +181,12 @@ inline constexpr Theme kDark{
     .memCardBack = rgb(70, 68, 88), // lifted so it reads on the dark table
     .memCardBackRing = rgb(112, 108, 140),
     .memCardFace = rgb(236, 232, 226), // stays light to back the emoji
+
+    .solTable = rgb(22, 66, 42), // felt, darkened
+    .solSlot = rgb(255, 255, 255, 28),
+    .solCardFace = rgb(234, 234, 230), // stays light to back the ink
+    .solCardBack = rgb(44, 64, 122),
+    .solCardBackInner = rgb(96, 118, 176),
 };
 
 // The active theme, selected by Settings::darkMode. Scenes call this fresh every
