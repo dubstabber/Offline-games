@@ -90,3 +90,11 @@ add_test(NAME klondike COMMAND test_klondike)
 add_executable(test_klondike_solver test_klondike_solver.cpp)
 target_link_libraries(test_klondike_solver PRIVATE engine)
 add_test(NAME klondike_solver COMMAND test_klondike_solver)
+
+# Parses the shipped deal lists and re-solves the cheapest seed of each tier, so
+# the asset path is passed in as a compile definition.
+add_executable(test_solitaire_deals test_solitaire_deals.cpp)
+target_link_libraries(test_solitaire_deals PRIVATE engine)
+target_compile_definitions(test_solitaire_deals PRIVATE
+    SOLITAIRE_DEALS_PATH="${CMAKE_SOURCE_DIR}/assets/solitaire/deals.bytes")
+add_test(NAME solitaire_deals COMMAND test_solitaire_deals)
