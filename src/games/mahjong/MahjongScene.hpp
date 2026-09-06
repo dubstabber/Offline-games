@@ -25,9 +25,9 @@ using Color = SDL_Color;
 // each layer lifts up and to the left, faces drawn from code (dots, bamboo,
 // numbers, wind and dragon letters) or emoji (flowers, seasons, the red
 // dragon). Tap a free tile to select it and a matching free tile to clear the
-// pair; blocked tiles wobble. Undo, a hint that pulses a matchable pair, and a
-// solvable shuffle sit under the board. Clearing the board advances the saved
-// level and offers NEXT. Boards come from MahjongLayouts and are dealt
+// pair; blocked tiles wobble. When no pair is left the remaining tiles are
+// re-dealt solvably after a short banner. Clearing the board advances the
+// saved level and offers NEXT. Boards come from MahjongLayouts and are dealt
 // solvable, identical on every retry.
 class MahjongScene : public Scene {
 public:
@@ -56,9 +56,6 @@ private:
 
     void tapAt(float px, float py);
     [[nodiscard]] int tileAt(float px, float py) const;
-    void onHint();
-    void onShuffle();
-    void onUndo();
     void finishIfOver();
 
     void layoutBoard();
@@ -68,8 +65,7 @@ private:
     void drawTiles(Canvas& canvas) const;
     void drawTile(Canvas& canvas, const MahjongBoard::Tile& tile, Rect r, float scale,
                   Color face) const;
-    void drawFace(Canvas& canvas, const MahjongBoard::Tile& tile, float hintPulse,
-                  float bounce) const;
+    void drawFace(Canvas& canvas, const MahjongBoard::Tile& tile, float bounce) const;
     void drawVanishes(Canvas& canvas) const;
     void drawOverlay(Canvas& canvas) const;
 
@@ -80,20 +76,17 @@ private:
     MahjongBoard board_;
     Phase phase_ = Phase::Playing;
     IconButton backButton_;
-    IconButton undoButton_;
-    IconButton hintButton_;
-    IconButton shuffleButton_;
     ResultOverlay overlay_;
 
     std::vector<int> drawOrder_; // tile ids by layer, then row, then column
     std::vector<Vanish> vanishes_;
     int shakeId_ = -1;
     float shakeT_ = 1.0F;
-    int hintA_ = -1;
-    int hintB_ = -1;
-    float hintT_ = 0.0F;    // seconds of hint pulse left
     float shuffleT_ = 1.0F; // bounce after a shuffle
-    bool noMoves_ = false;  // show the "no moves" banner
+    // Set when no pair can be matched; after a short banner the remaining
+    // tiles are re-dealt (solvably) by themselves.
+    bool noMoves_ = false;
+    float noMovesT_ = 0.0F;
 
     // Board placement in pixels, recomputed per layout so each size fits.
     float tileW_ = 60.0F;

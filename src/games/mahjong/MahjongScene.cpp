@@ -34,15 +34,11 @@ constexpr float kButtonRadius = 56.0F;
 constexpr float kDiffLabelCy = 70.0F;
 constexpr float kLevelLabelCy = 132.0F;
 constexpr float kStatusCy = 196.0F;
-constexpr float kToolRowCy = 1352.0F;
-constexpr float kUndoCx = 150.0F;
-constexpr float kHintCx = layout::kWidthF / 2.0F;
-constexpr float kShuffleCx = layout::kWidthF - 150.0F;
 
 // ---- Board play area ----------------------------------------------------------
 constexpr float kAreaX = 20.0F;
 constexpr float kAreaTop = 236.0F;
-constexpr float kAreaBottom = 1270.0F;
+constexpr float kAreaBottom = 1390.0F;
 constexpr float kAreaW = layout::kWidthF - (2.0F * kAreaX);
 constexpr float kAreaH = kAreaBottom - kAreaTop;
 constexpr float kMaxTileW = 90.0F;
@@ -54,13 +50,10 @@ constexpr float kRadiusFrac = 0.12F;
 // ---- Motion -------------------------------------------------------------------
 constexpr float kVanishSeconds = 0.32F;
 constexpr float kShakeSeconds = 0.3F;
-constexpr float kHintSeconds = 2.2F;
+constexpr float kNoMovesSeconds = 1.6F; // banner time before the auto-shuffle
 constexpr float kShuffleSeconds = 0.35F;
 constexpr float kButtonRowY = 820.0F;
 
-constexpr const char* kUndo = "\xE2\x86\xA9";          // ↩
-constexpr const char* kHint = "\xF0\x9F\x92\xA1";      // 💡
-constexpr const char* kShuffle = "\xF0\x9F\x94\x80";   // 🔀
 constexpr const char* kRedDragon = "\xF0\x9F\x80\x84"; // 🀄
 constexpr std::array<const char*, 4> kFlowers{
     "\xF0\x9F\x8C\xB8", "\xF0\x9F\x8C\xBC", "\xF0\x9F\x8C\xBB", "\xF0\x9F\x8C\xB7"}; // 🌸 🌼 🌻 🌷
@@ -192,7 +185,7 @@ void drawBanner(Canvas& canvas) {
     const float y = 700.0F;
     canvas.fillRoundedRect(x, y, kW, kH, 28.0F, withAlpha(colors::gridBlack, 0.82F));
     canvas.textCentered("NO MOVES LEFT", layout::kWidthF / 2.0F, y + 52.0F, 44.0F, colors::white);
-    canvas.textCentered("Shuffle the tiles or undo", layout::kWidthF / 2.0F, y + 108.0F, 28.0F,
+    canvas.textCentered("Shuffling the tiles...", layout::kWidthF / 2.0F, y + 108.0F, 28.0F,
                         colors::textMuted);
 }
 
@@ -207,17 +200,8 @@ MahjongScene::MahjongScene(SceneManager& manager, Difficulty difficulty, int lev
       layoutName_(mahjongLayoutFor(difficulty, level_).name),
       board_(mahjongLayoutFor(difficulty, level_).slots, mahjongLevelSeed(difficulty, level_)),
       backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kButtonRadius),
-      undoButton_(IconButton::Icon::Glyph, kUndoCx, kToolRowCy, kButtonRadius),
-      hintButton_(IconButton::Icon::Glyph, kHintCx, kToolRowCy, kButtonRadius),
-      shuffleButton_(IconButton::Icon::Glyph, kShuffleCx, kToolRowCy, kButtonRadius),
       overlay_(color(difficulty_), colors::white, kButtonRowY) {
     backButton_.setOnTap([this] { manager_.pop(); });
-    undoButton_.setGlyph(kUndo, 54.0F);
-    undoButton_.setOnTap([this] { onUndo(); });
-    hintButton_.setGlyph(kHint, 54.0F);
-    hintButton_.setOnTap([this] { onHint(); });
-    shuffleButton_.setGlyph(kShuffle, 54.0F);
-    shuffleButton_.setOnTap([this] { onShuffle(); });
     overlay_.setOnHome([this] { manager_.popToRoot(); });
     overlay_.setActionLabel("NEXT");
     overlay_.setOnAction([this] {
@@ -285,8 +269,8 @@ void MahjongScene::tapAt(float px, float py) {
     case MahjongBoard::Tap::Matched:
         vanishes_.push_back({.id = id, .t = 0.0F});
         vanishes_.push_back({.id = partner, .t = 0.0F});
-        hintT_ = 0.0F;
         noMoves_ = !board_.isWon() && !board_.hasMoves();
+        noMovesT_ = 0.0F;
         break;
     case MahjongBoard::Tap::Blocked:
         shakeId_ = id;
@@ -299,34 +283,6 @@ void MahjongScene::tapAt(float px, float py) {
     }
 }
 
-void MahjongScene::onHint() {
-    const auto [a, b] = board_.hint();
-    if (a < 0) {
-        noMoves_ = !board_.isWon();
-        return;
-    }
-    hintA_ = a;
-    hintB_ = b;
-    hintT_ = kHintSeconds;
-}
-
-void MahjongScene::onShuffle() {
-    if (board_.shuffle()) {
-        shuffleT_ = 0.0F;
-        hintT_ = 0.0F;
-        noMoves_ = false;
-        vanishes_.clear();
-    }
-}
-
-void MahjongScene::onUndo() {
-    if (board_.undo()) {
-        hintT_ = 0.0F;
-        noMoves_ = false;
-        vanishes_.clear();
-    }
-}
-
 void MahjongScene::handleInput(const PointerEvent& event) {
     if (backButton_.handleInput(event)) {
         return;
@@ -335,9 +291,8 @@ void MahjongScene::handleInput(const PointerEvent& event) {
         overlay_.handleInput(event);
         return;
     }
-    if (undoButton_.handleInput(event) || hintButton_.handleInput(event) ||
-        shuffleButton_.handleInput(event)) {
-        return;
+    if (noMoves_) {
+        return; // the re-deal is on its way
     }
     if (event.phase == PointerEvent::Phase::Down) {
         tapAt(event.x, event.y);
@@ -361,13 +316,18 @@ void MahjongScene::update(float dtSeconds) {
     std::erase_if(vanishes_, [](const Vanish& v) { return v.t >= kVanishSeconds; });
     shakeT_ = std::min(kShakeSeconds, shakeT_ + dtSeconds);
     shuffleT_ = std::min(kShuffleSeconds, shuffleT_ + dtSeconds);
-    hintT_ = std::max(0.0F, hintT_ - dtSeconds);
+    if (noMoves_) {
+        noMovesT_ += dtSeconds;
+        if (noMovesT_ >= kNoMovesSeconds && board_.shuffle()) {
+            noMoves_ = false;
+            shuffleT_ = 0.0F;
+        }
+    }
     finishIfOver();
 }
 
 bool MahjongScene::isAnimating() const {
-    return !vanishes_.empty() || shakeT_ < kShakeSeconds || shuffleT_ < kShuffleSeconds ||
-           hintT_ > 0.0F;
+    return !vanishes_.empty() || shakeT_ < kShakeSeconds || shuffleT_ < kShuffleSeconds || noMoves_;
 }
 
 // ---- Drawing ------------------------------------------------------------------
@@ -380,9 +340,6 @@ void MahjongScene::drawTopBar(Canvas& canvas) const {
                         56.0F, theme().primaryText);
     canvas.textCentered(layoutName_ + "  \xC2\xB7  " + std::to_string(board_.remaining()) + " left",
                         layout::kWidthF / 2.0F, kStatusCy, 28.0F, theme().mjStatusText);
-    undoButton_.render(canvas);
-    hintButton_.render(canvas);
-    shuffleButton_.render(canvas);
 }
 
 void MahjongScene::drawTile(Canvas& canvas, const MahjongBoard::Tile& tile, Rect r, float scale,
@@ -396,8 +353,7 @@ void MahjongScene::drawTile(Canvas& canvas, const MahjongBoard::Tile& tile, Rect
     drawSymbol(canvas, tile, cx, cy, w, h);
 }
 
-void MahjongScene::drawFace(Canvas& canvas, const MahjongBoard::Tile& tile, float hintPulse,
-                            float bounce) const {
+void MahjongScene::drawFace(Canvas& canvas, const MahjongBoard::Tile& tile, float bounce) const {
     if (tile.removed) {
         return;
     }
@@ -405,11 +361,6 @@ void MahjongScene::drawFace(Canvas& canvas, const MahjongBoard::Tile& tile, floa
     if (tile.id == shakeId_ && shakeT_ < kShakeSeconds) {
         r.x +=
             tileW_ * 0.08F * std::sin(shakeT_ / kShakeSeconds * 3.0F * std::numbers::pi_v<float>);
-    }
-    if (hintT_ > 0.0F && (tile.id == hintA_ || tile.id == hintB_)) {
-        const float grow = 3.0F + (3.0F * hintPulse);
-        canvas.fillRoundedRect(r.x - grow, r.y - grow, r.w + (2.0F * grow), r.h + (2.0F * grow),
-                               (tileW_ * kRadiusFrac) + grow, colors::accent);
     }
     Color face = theme().mjTileFace;
     if (tile.id == board_.selected()) {
@@ -421,8 +372,6 @@ void MahjongScene::drawFace(Canvas& canvas, const MahjongBoard::Tile& tile, floa
 }
 
 void MahjongScene::drawTiles(Canvas& canvas) const {
-    const float hintPulse =
-        0.5F + (0.5F * std::sin(hintT_ * 2.0F * std::numbers::pi_v<float> * 1.6F));
     float bounce = 1.0F;
     if (shuffleT_ < kShuffleSeconds) {
         bounce =
@@ -450,7 +399,7 @@ void MahjongScene::drawTiles(Canvas& canvas) const {
                                    tileW_ * kRadiusFrac, theme().mjTileSide);
         }
         for (std::size_t i = begin; i < end; ++i) {
-            drawFace(canvas, tileOf(i), hintPulse, bounce);
+            drawFace(canvas, tileOf(i), bounce);
         }
         begin = end;
     }
