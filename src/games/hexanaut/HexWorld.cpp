@@ -78,6 +78,8 @@ void HexWorld::spawnHome(Player& p, HexCoord center, int radius) {
     p.trail.clear();
     p.stepInterval = p.baseStepInterval;
     p.teleportCooldown = 0.0F;
+    p.decidedCell = HexCoord{.q = -1, .r = -1};
+    p.decisionAge = 0;
     for (int q = center.q - radius; q <= center.q + radius; ++q) {
         for (int r = center.r - radius; r <= center.r + radius; ++r) {
             const HexCoord h{q, r};
@@ -123,11 +125,20 @@ HexDir HexWorld::deflectHeading(HexCoord cell, HexDir heading) const {
 void HexWorld::decideBots() {
     const HexWorldView view(*this);
     for (Player& p : players_) {
-        if (p.isBot && p.alive && bots_.at(static_cast<std::size_t>(p.id))) {
-            p.desiredDir = bots_.at(static_cast<std::size_t>(p.id))->decide(view, p.id);
-            if (p.desiredDir != HexDir::None) {
-                p.desiredAngle = dirAngle(p.desiredDir); // bots steer toward their chosen axis
-            }
+        if (!p.isBot || !p.alive || !bots_.at(static_cast<std::size_t>(p.id))) {
+            continue;
+        }
+        // Decide on entering a new hex, plus a periodic re-think while sliding
+        // along inside one (e.g. deflecting off a wall).
+        if (p.cell == p.decidedCell && p.decisionAge < config::kBotDecisionTicks) {
+            ++p.decisionAge;
+            continue;
+        }
+        p.decidedCell = p.cell;
+        p.decisionAge = 0;
+        p.desiredDir = bots_.at(static_cast<std::size_t>(p.id))->decide(view, p.id);
+        if (p.desiredDir != HexDir::None) {
+            p.desiredAngle = dirAngle(p.desiredDir); // bots steer toward their chosen axis
         }
     }
 }
@@ -601,38 +612,8 @@ int HexWorldView::territoryCount(PlayerId id) const {
 std::span<const HexCoord> HexWorldView::trailOf(PlayerId id) const {
     return world_->players().at(static_cast<std::size_t>(id)).trail;
 }
-
-int HexWorldView::distanceToOwn(HexCoord from, PlayerId id, int maxRadius) const {
-    const HexGrid& g = world_->grid();
-    if (!g.contains(from)) {
-        return maxRadius + 1;
-    }
-    if (g.at(from).owner == id) {
-        return 0;
-    }
-    std::unordered_set<int> seen;
-    std::deque<std::pair<HexCoord, int>> queue;
-    seen.insert(g.index(from));
-    queue.emplace_back(from, 0);
-    while (!queue.empty()) {
-        const auto [c, dist] = queue.front();
-        queue.pop_front();
-        if (dist >= maxRadius) {
-            continue;
-        }
-        for (int d = 0; d < 6; ++d) {
-            const HexCoord nb = neighbor(c, static_cast<HexDir>(d));
-            if (!g.contains(nb) || seen.contains(g.index(nb))) {
-                continue;
-            }
-            if (g.at(nb).owner == id) {
-                return dist + 1;
-            }
-            seen.insert(g.index(nb));
-            queue.emplace_back(nb, dist + 1);
-        }
-    }
-    return maxRadius + 1;
+float HexWorldView::stepIntervalOf(PlayerId id) const {
+    return world_->players().at(static_cast<std::size_t>(id)).stepInterval;
 }
 
 void HexWorld::closeTrailAndCapture(Player& p) {

@@ -88,6 +88,12 @@ inline constexpr std::array<std::pair<int, int>, 6> kHexDirs{{
     return {c.q + dq, c.r + dr};
 }
 
+// `n` steps from `c` along `d` (a straight hex line).
+[[nodiscard]] constexpr HexCoord advance(HexCoord c, HexDir d, int n) {
+    const auto [dq, dr] = kHexDirs.at(static_cast<std::size_t>(d));
+    return {c.q + (dq * n), c.r + (dr * n)};
+}
+
 // Opposite direction: N<->S, NE<->SW, SE<->NW. Used to forbid 180° reversal.
 [[nodiscard]] constexpr HexDir opposite(HexDir d) {
     return static_cast<HexDir>((static_cast<std::uint8_t>(d) + 3U) % 6U);

@@ -4,6 +4,7 @@
 #include "games/hexanaut/HexTypes.hpp"
 #include "games/hexanaut/HexWorld.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
@@ -226,7 +227,9 @@ void testStartHome() {
     assert(world.territoryCount(0) == 19);
     assert(world.playerAlive());
     assert(world.playerPercent() > 0.0F);
-    assert(world.totalCells() == 56 * 56);
+    const auto params = og::hexanaut::config::paramsFor(0);
+    assert(world.totalCells() == params.gridW * params.gridH);
+    assert(world.grid().width() >= 84); // a big board: room for loops away from rivals
 }
 
 void testTrailRecording() {
@@ -533,6 +536,73 @@ void testSmartBotAvoidsOwnTrailTrap() {
     assert(world.trailOwnerAt(neighbor(world.players().at(1).cell, decision)) != 1);
 }
 
+// A rival out on a trail that the bot can reach well before they could get home
+// is hunted: the bot leaves its land and steers for the nearest trail cell.
+void testSmartBotHuntsExposedRival() {
+    HexWorld world(0, 300);
+    const int n = static_cast<int>(world.players().size());
+    for (int id = 1; id < n; ++id) {
+        world.setAliveForTest(static_cast<PlayerId>(id), false);
+    }
+    for (int q = 19; q <= 25; ++q) {
+        world.setOwnerForTest(hc(q, 20), og::hexanaut::kNeutral); // a clear corridor
+    }
+    // The human's home is far away in the board centre; it lays a trail eastward.
+    world.placePlayerForTest(0, hc(22, 20), HexDir::SE);
+    for (int k = 0; k < 3; ++k) {
+        walk(world, HexDir::SE);
+    }
+    assert(world.player().cell == hc(25, 20));
+    assert(world.trailOwnerAt(hc(23, 20)) == 0);
+
+    // Bot 1 sits on its own land three hexes west of that trail.
+    world.setOwnerForTest(hc(19, 20), 1);
+    world.setOwnerForTest(hc(20, 20), 1);
+    world.setAliveForTest(1, true);
+    world.placePlayerForTest(1, hc(20, 20), HexDir::SE);
+
+    const HexDir decision = smartDecision(world, 1);
+    assert(hexDistance(neighbor(hc(20, 20), decision), hc(23, 20)) == 2); // closing in
+}
+
+// Left to themselves for 30 s, the bots on every difficulty plan loops and grow
+// well beyond their 19-cell spawn blobs — and none of them dies by its own hand
+// (every respawn is matched by a rival's kill).
+void testSmartBotsExpandWithoutSelfHarm() {
+    for (int difficulty = 0; difficulty < 3; ++difficulty) {
+        HexWorld world(difficulty, 4242);
+        world.setAliveForTest(0, false); // the human sits this one out
+        const int n = static_cast<int>(world.players().size());
+        std::vector<HexCoord> homes;
+        for (int id = 1; id < n; ++id) {
+            homes.push_back(world.players().at(static_cast<std::size_t>(id)).home);
+        }
+        int respawns = 0;
+        for (int k = 0; k < 1800; ++k) {
+            world.step();
+            for (int id = 1; id < n; ++id) {
+                HexCoord& home = homes.at(static_cast<std::size_t>(id - 1));
+                const HexCoord now = world.players().at(static_cast<std::size_t>(id)).home;
+                if (now != home) {
+                    home = now;
+                    ++respawns;
+                }
+            }
+        }
+        int total = 0;
+        int peak = 0;
+        int kills = 0;
+        for (int id = 1; id < n; ++id) {
+            total += world.territoryCount(static_cast<PlayerId>(id));
+            peak = std::max(peak, world.territoryCount(static_cast<PlayerId>(id)));
+            kills += world.players().at(static_cast<std::size_t>(id)).kills;
+        }
+        assert(total >= (n - 1) * 19 * 4); // the bots as a group at least quadrupled their land
+        assert(peak >= 150);               // and somebody built real loops
+        assert(respawns <= kills + 1);     // no self-cuts / wall deaths (at most 1 head-to-head)
+    }
+}
+
 // On a saturated map (one player owns nearly everything) there is no clear spawn
 // blob, so respawning bots must scatter to different cells instead of all piling
 // onto the grid centre, where they used to collide endlessly.
@@ -819,6 +889,8 @@ int main() {
     testSmartBotCutsAdjacentTrail();
     testSmartBotReturnsToOwnedLandWhenThreatened();
     testSmartBotAvoidsOwnTrailTrap();
+    testSmartBotHuntsExposedRival();
+    testSmartBotsExpandWithoutSelfHarm();
     testCrowdedRespawnScatters();
     testShooterCaptures();
     testStaticShootersAtStart();

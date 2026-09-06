@@ -85,12 +85,18 @@ inline constexpr float kSlowFactor = 1.85F; // multiplies stepInterval inside (>
 // ---- Teleport item ----------------------------------------------------------
 // Static, paired endpoints. A player can use a pair only while they own both
 // endpoints; the cooldown prevents an immediate return jump from rapid re-entry.
-inline constexpr int kTeleportMinDistance = 12;
+inline constexpr int kTeleportMinDistance = 16;
 inline constexpr float kTeleportCooldown = 0.45F;
 
+// ---- Bots -------------------------------------------------------------------
+// A bot re-decides whenever it enters a new hex; this caps how many ticks it may
+// go without re-deciding while still inside the same one (wall slides).
+inline constexpr int kBotDecisionTicks = 12;
+
 // ---- Per-difficulty parameters ----------------------------------------------
-// Lower stepInterval = faster. Harder = bigger map, more & faster bots, more
-// static items.
+// Lower stepInterval = faster. Harder = bigger map, more & faster & bolder bots,
+// more static items. Every difficulty's board is large (84-108 hexes across) so
+// there is room to build big loops away from rivals and the items are spread out.
 struct DifficultyParams {
     int gridW;
     int gridH;
@@ -107,38 +113,38 @@ struct DifficultyParams {
 [[nodiscard]] constexpr DifficultyParams paramsFor(int difficultyIndex) {
     switch (difficultyIndex) {
     case 0:
-        return {.gridW = 56,
-                .gridH = 56,
+        return {.gridW = 84,
+                .gridH = 84,
                 .botCount = 4,
-                .botSkill = BotSkill::Basic,
+                .botSkill = BotSkill::Cautious,
                 .playerStepInterval = 0.14F,
                 .botStepInterval = 0.17F,
-                .shooterCount = 4,
-                .slowTotemCount = 3,
-                .spyDishCount = 2,
-                .teleportPairCount = 2};
-    case 2:
-        return {.gridW = 72,
-                .gridH = 72,
-                .botCount = 10,
-                .botSkill = BotSkill::Smart, // falls back to Basic until Phase E
-                .playerStepInterval = 0.10F,
-                .botStepInterval = 0.11F,
-                .shooterCount = 8,
-                .slowTotemCount = 5,
-                .spyDishCount = 4,
-                .teleportPairCount = 4};
-    default:
-        return {.gridW = 64,
-                .gridH = 64,
-                .botCount = 6,
-                .botSkill = BotSkill::Basic,
-                .playerStepInterval = 0.12F,
-                .botStepInterval = 0.14F,
                 .shooterCount = 6,
                 .slowTotemCount = 4,
                 .spyDishCount = 3,
                 .teleportPairCount = 3};
+    case 2:
+        return {.gridW = 108,
+                .gridH = 108,
+                .botCount = 10,
+                .botSkill = BotSkill::Ruthless,
+                .playerStepInterval = 0.10F,
+                .botStepInterval = 0.11F,
+                .shooterCount = 12,
+                .slowTotemCount = 8,
+                .spyDishCount = 5,
+                .teleportPairCount = 6};
+    default:
+        return {.gridW = 96,
+                .gridH = 96,
+                .botCount = 6,
+                .botSkill = BotSkill::Smart,
+                .playerStepInterval = 0.12F,
+                .botStepInterval = 0.14F,
+                .shooterCount = 9,
+                .slowTotemCount = 6,
+                .spyDishCount = 4,
+                .teleportPairCount = 4};
     }
 }
 

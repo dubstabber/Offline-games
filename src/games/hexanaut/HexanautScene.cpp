@@ -820,44 +820,6 @@ void HexanautScene::drawSpyDishes(Canvas& canvas) const {
     }
 }
 
-void HexanautScene::drawTeleportTube(Canvas& canvas, Vec2 from, Vec2 to,
-                                     hexanaut::PlayerId owner) const {
-    const Vec2 delta = to - from;
-    const float len = hexanaut::length(delta);
-    if (len < 1.0F) {
-        return;
-    }
-    const Vec2 mid = hexanaut::lerp(from, to, 0.5F);
-    const Vec2 perp{-delta.y / len, delta.x / len};
-    const float curve = std::clamp(len * 0.18F, 45.0F, 170.0F);
-    const Vec2 ctrl = mid + (perp * curve);
-    constexpr float kLift = cfg::kPrismLift + 22.0F;
-    constexpr int kSeg = 18;
-    const float tubeW = std::max(8.0F, cfg::kHexSize * zoom_ * 0.34F);
-    const Color ownerCol = pal::topColor(owner);
-
-    const auto pointAt = [&](float t) {
-        const Vec2 ab = hexanaut::lerp(from, ctrl, t);
-        const Vec2 bc = hexanaut::lerp(ctrl, to, t);
-        return hexanaut::lerp(ab, bc, t);
-    };
-    const auto stroke = [&](float width, Color color, float dy) {
-        ScreenPos prev = toScreen(from, kLift);
-        for (int i = 1; i <= kSeg; ++i) {
-            const float t = static_cast<float>(i) / static_cast<float>(kSeg);
-            const ScreenPos cur = toScreen(pointAt(t), kLift);
-            canvas.line(prev.x, prev.y + dy, cur.x, cur.y + dy, width, color);
-            prev = cur;
-        }
-    };
-
-    stroke(tubeW * 2.8F, pal::withAlpha(ownerCol, 42), 0.0F);
-    stroke(tubeW * 2.0F, rgb(0, 0, 0, 80), tubeW * 0.18F);
-    stroke(tubeW * 1.45F, rgb(210, 214, 220), 0.0F);
-    stroke(tubeW, rgb(250, 250, 252), 0.0F);
-    stroke(tubeW * 0.28F, rgb(255, 255, 255), -tubeW * 0.28F);
-}
-
 void HexanautScene::drawTeleportEndpoint(Canvas& canvas, Vec2 worldCenter, bool active,
                                          hexanaut::PlayerId owner, int phase) const {
     constexpr float kS = cfg::kHexSize;
@@ -912,13 +874,6 @@ void HexanautScene::drawTeleportEndpoint(Canvas& canvas, Vec2 worldCenter, bool 
 
 void HexanautScene::drawTeleports(Canvas& canvas) const {
     constexpr float kS = cfg::kHexSize;
-    for (const hexanaut::TeleportPair& t : world_.teleports()) {
-        const hexanaut::PlayerId owner = world_.ownerAt(t.a);
-        if (owner != hexanaut::kNeutral && world_.ownerAt(t.b) == owner) {
-            drawTeleportTube(canvas, hexanaut::axialToWorld(t.a, kS),
-                             hexanaut::axialToWorld(t.b, kS), owner);
-        }
-    }
     for (const hexanaut::TeleportPair& t : world_.teleports()) {
         const hexanaut::PlayerId owner = world_.ownerAt(t.a);
         const bool active = owner != hexanaut::kNeutral && world_.ownerAt(t.b) == owner;
@@ -1182,6 +1137,40 @@ void HexanautScene::drawMinimapItems(Canvas& canvas, float boxX, float boxY, flo
     }
 }
 
+void HexanautScene::appendMinimapRow(int r, float boxX, float py, float cw, float half, bool spy) {
+    const hexanaut::HexGrid& grid = world_.grid();
+    int runStart = 0;
+    hexanaut::PlayerId runOwner = hexanaut::kNeutral;
+    const auto flush = [&](int runEnd) { // cells [runStart, runEnd) share runOwner
+        if (runOwner == hexanaut::kNeutral) {
+            return;
+        }
+        const float x0 = boxX + ((static_cast<float>(runStart) + 0.5F) * cw) - half;
+        const float x1 = boxX + ((static_cast<float>(runEnd) - 0.5F) * cw) + half;
+        const Color col = pal::topColor(runOwner);
+        const auto base = static_cast<int>(meshVerts_.size());
+        meshVerts_.push_back({.x = x0, .y = py - half, .color = col});
+        meshVerts_.push_back({.x = x1, .y = py - half, .color = col});
+        meshVerts_.push_back({.x = x1, .y = py + half, .color = col});
+        meshVerts_.push_back({.x = x0, .y = py + half, .color = col});
+        for (const int i : {0, 1, 2, 0, 2, 3}) {
+            meshIdx_.push_back(base + i);
+        }
+    };
+    for (int q = 0; q < grid.width(); ++q) {
+        hexanaut::PlayerId owner = grid.at(HexCoord{.q = q, .r = r}).owner;
+        if (owner != 0 && !spy) {
+            owner = hexanaut::kNeutral; // rivals' land stays hidden until a spy dish is captured
+        }
+        if (owner != runOwner) {
+            flush(q);
+            runStart = q;
+            runOwner = owner;
+        }
+    }
+    flush(grid.width());
+}
+
 void HexanautScene::drawMinimap(Canvas& canvas) {
     const hexanaut::HexGrid& grid = world_.grid();
     constexpr float kMap = 200.0F;
@@ -1199,27 +1188,13 @@ void HexanautScene::drawMinimap(Canvas& canvas) {
     // then only your own land and position show.
     const bool spy = world_.hasSpyReveal(0);
 
-    // Owned cells batched into one mesh (the field buffer is free to reuse here).
+    // Owned cells batched into one mesh (the field buffer is free to reuse here),
+    // one quad per horizontal run of same-owner cells.
     meshVerts_.clear();
     meshIdx_.clear();
     for (int r = 0; r < grid.height(); ++r) {
-        for (int q = 0; q < grid.width(); ++q) {
-            const hexanaut::Cell& cell = grid.at({q, r});
-            if (cell.owner == hexanaut::kNeutral || (cell.owner != 0 && !spy)) {
-                continue; // rivals' land stays hidden until a spy dish is captured
-            }
-            const float px = boxX + ((static_cast<float>(q) + 0.5F) * cw);
-            const float py = boxY + ((static_cast<float>(r) + 0.5F) * ch);
-            const Color col = pal::topColor(cell.owner);
-            const auto base = static_cast<int>(meshVerts_.size());
-            meshVerts_.push_back({.x = px - half, .y = py - half, .color = col});
-            meshVerts_.push_back({.x = px + half, .y = py - half, .color = col});
-            meshVerts_.push_back({.x = px + half, .y = py + half, .color = col});
-            meshVerts_.push_back({.x = px - half, .y = py + half, .color = col});
-            for (const int i : {0, 1, 2, 0, 2, 3}) {
-                meshIdx_.push_back(base + i);
-            }
-        }
+        const float py = boxY + ((static_cast<float>(r) + 0.5F) * ch);
+        appendMinimapRow(r, boxX, py, cw, half, spy);
     }
     canvas.fillMesh(meshVerts_, meshIdx_);
 

@@ -85,19 +85,22 @@ private:
     // Spy-dish items: a red-drum-plus-satellite-dish token for each one.
     void drawSpyDishes(Canvas& canvas) const;
     void drawSpyDish(Canvas& canvas, hexanaut::Vec2 worldCenter, int phase) const;
-    // Paired teleport items: endpoints are always visible; the white connection
-    // tube appears only while a pair is active for one owner.
+    // Paired teleport items: a pad token per endpoint, lit in the owner's color
+    // while its pair is active. Which pads connect is deliberately not drawn —
+    // finding out is part of the game.
     void drawTeleports(Canvas& canvas) const;
     void drawTeleportEndpoint(Canvas& canvas, hexanaut::Vec2 worldCenter, bool active,
                               hexanaut::PlayerId owner, int phase) const;
-    void drawTeleportTube(Canvas& canvas, hexanaut::Vec2 from, hexanaut::Vec2 to,
-                          hexanaut::PlayerId owner) const;
     // Append one 6-pointed snowflake (3 crossed bars) into the shared mesh buffers.
     void appendSnowflake(float sx, float sy, float size, Color color);
     void drawAvatars(Canvas& canvas) const;
     void drawHud(Canvas& canvas) const;
     void drawLeaderboard(Canvas& canvas) const;
     void drawMinimap(Canvas& canvas);
+    // Append one minimap row of territory as quads, merging runs of same-owner
+    // cells so a big board stays a few hundred vertices. Rivals' land is skipped
+    // unless `spy` reveals it.
+    void appendMinimapRow(int r, float boxX, float py, float cw, float half, bool spy);
     // Draw the static-item markers on the minimap. `spy` reveals each item's
     // owner tint; otherwise only your own items are tinted.
     void drawMinimapItems(Canvas& canvas, float boxX, float boxY, float cw, float ch, bool spy);

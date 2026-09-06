@@ -1,33 +1,54 @@
 #pragma once
 
 #include "games/hexanaut/BotController.hpp"
-#include "games/hexanaut/HexTypes.hpp"
 
 #include <cstdint>
 #include <memory>
-#include <random>
 
 namespace og::hexanaut {
 
-// v1 bot: leave home and carve a rough loop by running short straight legs with a
-// fixed turn bias, then dive back to its own territory to capture the enclosed
-// area. It avoids stepping on its own trail and bails home early when a rival gets
-// close. Plays only off HexWorldView, so stronger bots can share the same pure
-// simulation API without touching rendering or SDL-facing code.
-class BasicBot : public BotController {
-public:
-    explicit BasicBot(std::uint32_t seed);
-
-    HexDir decide(const HexWorldView& view, PlayerId self) override;
-
-private:
-    std::mt19937 rng_;
-    int legLength_;     // straight cells per leg before a turn
-    int expandTarget_;  // trail length backstop that forces a return
-    int threatRadius_;  // a rival this close to me triggers a retreat
-    int turnBias_;      // +1 or -1: which way the loop curls
-    int sinceTurn_ = 0; // cells since the last turn
+// Personality knobs for the planning bot — one preset per BotSkill (profileFor).
+// The seed adds a little per-bot variation on top, so one difficulty's bots don't
+// all play identically.
+struct BotProfile {
+    int maxLoop;           // largest hexagon-loop radius it will plan (min is 2)
+    float tolerance;       // seconds a rival may beat it to its trail by before it worries
+    float riskWeight;      // plan-score cost per second of that slack
+    int huntRadius;        // max hexes it will detour to cut a rival's exposed trail
+    float huntMargin;      // seconds it must beat the rival home by before committing
+    float rivalLandWeight; // value of enclosing one rival-owned cell (neutral = 1)
+    float humanBounty;     // extra hunt priority for the human's trail
 };
+
+[[nodiscard]] constexpr BotProfile profileFor(BotSkill skill) {
+    switch (skill) {
+    case BotSkill::Cautious:
+        return {.maxLoop = 5,
+                .tolerance = 0.25F,
+                .riskWeight = 12.0F,
+                .huntRadius = 2,
+                .huntMargin = 0.6F,
+                .rivalLandWeight = 1.1F,
+                .humanBounty = 0.0F};
+    case BotSkill::Ruthless:
+        return {.maxLoop = 9,
+                .tolerance = 1.3F,
+                .riskWeight = 4.0F,
+                .huntRadius = 14,
+                .huntMargin = 0.1F,
+                .rivalLandWeight = 1.4F,
+                .humanBounty = 30.0F};
+    case BotSkill::Smart:
+        break;
+    }
+    return {.maxLoop = 7,
+            .tolerance = 0.7F,
+            .riskWeight = 7.0F,
+            .huntRadius = 8,
+            .huntMargin = 0.3F,
+            .rivalLandWeight = 1.25F,
+            .humanBounty = 10.0F};
+}
 
 [[nodiscard]] std::unique_ptr<BotController> makeBot(BotSkill skill, std::uint32_t seed);
 

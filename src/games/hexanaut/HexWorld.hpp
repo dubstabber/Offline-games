@@ -36,6 +36,11 @@ struct Player {
     float stepInterval = 0.15F;     // seconds per hex
     float baseStepInterval = 0.15F; // restored on respawn
     float teleportCooldown = 0.0F;  // seconds until another paired teleport may trigger
+    // Bots re-decide when they enter a new hex (or after kBotDecisionTicks as a
+    // safety net), not every 60 Hz tick: the cell they stand on is what changes
+    // the picture, and it lets them afford real planning.
+    HexCoord decidedCell{.q = -1, .r = -1};
+    int decisionAge = 0;
 
     int territoryCount = 0;
     int kills = 0;

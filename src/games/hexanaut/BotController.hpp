@@ -10,10 +10,10 @@ namespace og::hexanaut {
 class HexWorld;
 
 // A read-only window onto the simulation handed to bot controllers. This is the
-// extension seam for AI: a smarter bot is just a new BotController subclass that
-// reads only this view, so the engine never has to change. It is deliberately
-// rich — per-cell ownership/trail, per-player state, and "go home" helpers — so a
-// future planner (A* home, threat scoring, cut-off attacks) needs no new plumbing.
+// extension seam for AI: a bot reads only this view, so the engine never has to
+// change for a new strategy. It is deliberately rich — per-cell ownership/trail
+// and per-player state and speed — so a planner can do its own path search and
+// threat scoring on top without new plumbing.
 class HexWorldView {
 public:
     explicit HexWorldView(const HexWorld& world) : world_(&world) {}
@@ -32,19 +32,19 @@ public:
     [[nodiscard]] HexDir headingOf(PlayerId id) const;
     [[nodiscard]] int territoryCount(PlayerId id) const;
     [[nodiscard]] std::span<const HexCoord> trailOf(PlayerId id) const;
-
-    // Shortest hex-step distance from `from` to the nearest cell owned by `id`,
-    // via a BFS bounded to `maxRadius` (returns maxRadius+1 if none within range).
-    // The "return home" primitive a strong bot builds on.
-    [[nodiscard]] int distanceToOwn(HexCoord from, PlayerId id, int maxRadius = 24) const;
+    // Seconds per hex for `id` right now — lets a bot compare who reaches a cell
+    // first (the human is faster than the bots on every difficulty).
+    [[nodiscard]] float stepIntervalOf(PlayerId id) const;
 
 private:
     const HexWorld* world_;
 };
 
-// Which controller a difficulty hands its bots. Smart arrives in a later phase as
-// a new BotController subclass; the engine just maps the enum in makeBot().
-enum class BotSkill : std::uint8_t { Basic, Smart };
+// How boldly a difficulty's bots play. All three are the same planning bot with
+// a different personality preset (see profileFor in HexBots.hpp): Cautious makes
+// small loops and rarely chases, Ruthless plans big loops and hunts anyone whose
+// trail it can reach in time.
+enum class BotSkill : std::uint8_t { Cautious, Smart, Ruthless };
 
 // Abstract bot strategy. Implementations return the direction the bot wants to
 // travel next; HexWorld applies it at the next cell centre (180° reversals and
