@@ -44,9 +44,9 @@ struct KlondikeRules {
     case 0:
         return {.drawCount = 1, .maxPasses = 0, .recyclePenalty = 0};
     case 2:
-        return {.drawCount = 3, .maxPasses = 3, .recyclePenalty = 100};
+        return {.drawCount = 3, .maxPasses = 3, .recyclePenalty = 50};
     default:
-        return {.drawCount = 3, .maxPasses = 0, .recyclePenalty = 50};
+        return {.drawCount = 3, .maxPasses = 0, .recyclePenalty = 20};
     }
 }
 
@@ -171,9 +171,9 @@ public:
 private:
     struct Snapshot {
         Layout layout;
-        int score;
-        int moves;
-        int passes;
+        int score = 0;
+        int moves = 0;
+        int passes = 1;
     };
 
     [[nodiscard]] Pile& pileMut(PileRef ref);
