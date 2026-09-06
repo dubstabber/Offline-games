@@ -98,3 +98,7 @@ target_link_libraries(test_solitaire_deals PRIVATE engine)
 target_compile_definitions(test_solitaire_deals PRIVATE
     SOLITAIRE_DEALS_PATH="${CMAKE_SOURCE_DIR}/assets/solitaire/deals.bytes")
 add_test(NAME solitaire_deals COMMAND test_solitaire_deals)
+
+add_executable(test_arrows test_arrows.cpp)
+target_link_libraries(test_arrows PRIVATE engine)
+add_test(NAME arrows COMMAND test_arrows)
