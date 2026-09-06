@@ -76,6 +76,12 @@ struct Settings {
     int solitaireBestEasy = 0;
     int solitaireBestMedium = 0;
     int solitaireBestHard = 0;
+    // Arrows progress: the current level (1-based) reached in each difficulty.
+    // Levels are generated from (difficulty, level), so the counter alone
+    // pins the board; clearing a level advances it.
+    int arrowsLevelEasy = 1;
+    int arrowsLevelMedium = 1;
+    int arrowsLevelHard = 1;
 };
 
 // Pure and SDL-free (so they are unit-testable): turn Settings into the on-disk

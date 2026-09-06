@@ -1,5 +1,6 @@
 #include "games/GameRegistry.hpp"
 
+#include "games/arrows/ArrowsScene.hpp"
 #include "games/blockfill/BlockFillScene.hpp"
 #include "games/hexanaut/HexanautScene.hpp"
 #include "games/hole/HoleScene.hpp"
@@ -181,6 +182,22 @@ const std::vector<GameInfo>& gameRegistry() {
             .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
                 return std::make_unique<SolitaireScene>(manager, difficulty);
             },
+        });
+
+        list.push_back(GameInfo{
+            .id = "arrows",
+            .title = "Arrows",
+            .emoji = "\xE2\x9E\xA1", // ➡
+            .description = "Tap an arrow to send it flying the way it points. It slides along "
+                           "its own path and off the board \xE2\x80\x94 unless another arrow "
+                           "is in the way, which costs a heart. Clear every arrow before your "
+                           "three hearts run out. Every level can be solved.",
+            .accent = colors::menuPurple,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<ArrowsScene>(manager, difficulty,
+                                                     arrowsSavedLevel(difficulty));
+            },
+            .currentLevel = [](Difficulty difficulty) { return arrowsSavedLevel(difficulty); },
         });
 
         // Placeholder cards for games not built yet: a title/emoji/accent so the

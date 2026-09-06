@@ -98,6 +98,7 @@ add_library(engine STATIC
     src/games/solitaire/SolitaireScene.cpp
     src/games/arrows/ArrowsBoard.cpp
     src/games/arrows/ArrowsGenerator.cpp
+    src/games/arrows/ArrowsScene.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
     src/scenes/SettingsScene.cpp)

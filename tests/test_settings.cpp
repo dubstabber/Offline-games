@@ -38,6 +38,9 @@ void testRoundTripDefaults() {
     assert(back.solitaireBestEasy == def.solitaireBestEasy);
     assert(back.solitaireBestMedium == def.solitaireBestMedium);
     assert(back.solitaireBestHard == def.solitaireBestHard);
+    assert(back.arrowsLevelEasy == def.arrowsLevelEasy);
+    assert(back.arrowsLevelMedium == def.arrowsLevelMedium);
+    assert(back.arrowsLevelHard == def.arrowsLevelHard);
 }
 
 // Custom values survive the round-trip too (volume to 2 decimals).
@@ -63,6 +66,9 @@ void testRoundTripCustom() {
     s.solitaireBestEasy = 640;
     s.solitaireBestMedium = 410;
     s.solitaireBestHard = 275;
+    s.arrowsLevelEasy = 11;
+    s.arrowsLevelMedium = 8;
+    s.arrowsLevelHard = 2;
     const Settings back = parse(serialize(s));
     assert(back.darkMode);
     assert(nearly(back.volume, 0.35F));
@@ -84,6 +90,9 @@ void testRoundTripCustom() {
     assert(back.solitaireBestEasy == 640);
     assert(back.solitaireBestMedium == 410);
     assert(back.solitaireBestHard == 275);
+    assert(back.arrowsLevelEasy == 11);
+    assert(back.arrowsLevelMedium == 8);
+    assert(back.arrowsLevelHard == 2);
 }
 
 // Empty or whitespace-only input yields the defaults.

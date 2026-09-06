@@ -71,6 +71,12 @@ struct Theme {
     Color solCardFace;      // face-up card (light, backs the black/red ink)
     Color solCardBack;      // face-down card
     Color solCardBackInner; // the frame pattern on a face-down card
+
+    // Arrows.
+    Color arField;     // paper-like board background (the arrows are ink on it)
+    Color arDot;       // faint dot at every grid cell centre
+    Color arInk;       // arrow shafts and heads
+    Color arHeartLost; // a spent heart (live ones stay red)
 };
 
 // Light theme = the project's current colors (verbatim, so default builds look
@@ -129,6 +135,11 @@ inline constexpr Theme kLight{
     .solCardFace = rgb(253, 253, 250),      // white card
     .solCardBack = rgb(52, 84, 160),        // navy back
     .solCardBackInner = rgb(120, 146, 208), // lighter frame on the back
+
+    .arField = rgb(252, 250, 246), // warm paper white, like the original
+    .arDot = rgb(214, 206, 196),
+    .arInk = rgb(32, 32, 36),
+    .arHeartLost = rgb(228, 216, 214),
 };
 
 // Dark theme: charcoal chrome with near-white text; each game keeps its hue
@@ -187,6 +198,11 @@ inline constexpr Theme kDark{
     .solCardFace = rgb(234, 234, 230), // stays light to back the ink
     .solCardBack = rgb(44, 64, 122),
     .solCardBackInner = rgb(96, 118, 176),
+
+    .arField = rgb(22, 22, 26), // charcoal paper
+    .arDot = rgb(56, 56, 64),
+    .arInk = rgb(232, 232, 236), // must invert: ink vanishes on dark
+    .arHeartLost = rgb(64, 56, 60),
 };
 
 // The active theme, selected by Settings::darkMode. Scenes call this fresh every
