@@ -36,7 +36,8 @@ constexpr int kDealAttempts = 400;
 
 } // namespace
 
-MahjongBoard::MahjongBoard(std::span<const Slot> slots, std::uint32_t seed) : rng_(seed) {
+MahjongBoard::MahjongBoard(std::span<const Slot> slots, std::uint32_t seed)
+    : rng_(seed), remaining_(static_cast<int>(slots.size() - (slots.size() % 2))) {
     const std::size_t count = slots.size() - (slots.size() % 2);
     tiles_.reserve(count);
     for (const Slot& slot : slots.subspan(0, count)) {
@@ -45,7 +46,6 @@ MahjongBoard::MahjongBoard(std::span<const Slot> slots, std::uint32_t seed) : rn
         height_ = std::max(height_, slot.y + kSpan);
         layers_ = std::max(layers_, slot.z + 1);
     }
-    remaining_ = tileCount();
     computeNeighbours();
 
     // Pairs: two per group in hand-out order, one for a leftover half group.

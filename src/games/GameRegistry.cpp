@@ -4,6 +4,7 @@
 #include "games/blockfill/BlockFillScene.hpp"
 #include "games/hexanaut/HexanautScene.hpp"
 #include "games/hole/HoleScene.hpp"
+#include "games/mahjong/MahjongScene.hpp"
 #include "games/memory/MemoryScene.hpp"
 #include "games/minesweeper/MineSweeperScene.hpp"
 #include "games/nibbles/NibblesScene.hpp"
@@ -198,6 +199,23 @@ const std::vector<GameInfo>& gameRegistry() {
                                                      arrowsSavedLevel(difficulty));
             },
             .currentLevel = [](Difficulty difficulty) { return arrowsSavedLevel(difficulty); },
+        });
+
+        list.push_back(GameInfo{
+            .id = "mahjong",
+            .title = "Mahjong",
+            .emoji = "\xF0\x9F\x80\x84", // 🀄
+            .description = "Clear the board by pairing identical tiles. A tile can be picked "
+                           "only when nothing sits on it and its left or right side is open. "
+                           "Any flower matches any flower, any season any season. Use a hint "
+                           "when you are stuck, undo a move, or shuffle what is left \xE2\x80\x94 "
+                           "every deal can be cleared.",
+            .accent = colors::easyGreen,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<MahjongScene>(manager, difficulty,
+                                                      mahjongSavedLevel(difficulty));
+            },
+            .currentLevel = [](Difficulty difficulty) { return mahjongSavedLevel(difficulty); },
         });
 
         // Placeholder cards for games not built yet: a title/emoji/accent so the

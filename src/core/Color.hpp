@@ -73,6 +73,16 @@ constexpr Color mineToggleIdle = rgb(96, 104, 120);   // unselected mode
 constexpr Color blockFillRope = rgb(99, 179, 237); // light-blue rope body (== accent)
 constexpr Color blockFillTube = rgb(56, 130, 200); // darker tube + head dot
 
+// Mahjong: the symbols on the ivory tile faces. Identity colors (faces stay
+// light in both themes): blue dots and the white dragon's frame, green bamboo
+// and the green dragon, red numbers, black wind letters, a warm yellow face
+// for the selected tile.
+constexpr Color mahjongDot = rgb(40, 110, 200);
+constexpr Color mahjongBamboo = rgb(46, 150, 82);
+constexpr Color mahjongNumber = rgb(206, 52, 52);
+constexpr Color mahjongInk = rgb(36, 36, 40);
+constexpr Color mahjongSelected = rgb(255, 226, 120);
+
 constexpr Color white = rgb(255, 255, 255);
 constexpr Color overlay = rgb(0, 0, 0, 150); // semi-transparent game-over layer
 } // namespace colors

@@ -77,6 +77,13 @@ struct Theme {
     Color arDot;       // faint dot at every grid cell centre
     Color arInk;       // arrow shafts and heads
     Color arHeartLost; // a spent heart (live ones stay red)
+
+    // Mahjong.
+    Color mjTable;      // the table the tiles sit on (green felt)
+    Color mjTileFace;   // a free tile's ivory face (backs the symbols)
+    Color mjTileDim;    // a blocked/covered tile's face
+    Color mjTileSide;   // the tan side showing under and right of each tile
+    Color mjStatusText; // the layout / tiles-left line
 };
 
 // Light theme = the project's current colors (verbatim, so default builds look
@@ -140,6 +147,12 @@ inline constexpr Theme kLight{
     .arDot = rgb(214, 206, 196),
     .arInk = rgb(32, 32, 36),
     .arHeartLost = rgb(228, 216, 214),
+
+    .mjTable = rgb(34, 104, 88), // deep teal-green felt
+    .mjTileFace = rgb(252, 248, 236),
+    .mjTileDim = rgb(212, 206, 190),
+    .mjTileSide = rgb(190, 166, 124),
+    .mjStatusText = rgb(196, 226, 214),
 };
 
 // Dark theme: charcoal chrome with near-white text; each game keeps its hue
@@ -203,6 +216,12 @@ inline constexpr Theme kDark{
     .arDot = rgb(56, 56, 64),
     .arInk = rgb(232, 232, 236), // must invert: ink vanishes on dark
     .arHeartLost = rgb(64, 56, 60),
+
+    .mjTable = rgb(20, 56, 48),       // darker felt
+    .mjTileFace = rgb(236, 230, 214), // stays light to back the symbols
+    .mjTileDim = rgb(168, 162, 146),
+    .mjTileSide = rgb(122, 104, 76),
+    .mjStatusText = rgb(170, 196, 186),
 };
 
 // The active theme, selected by Settings::darkMode. Scenes call this fresh every

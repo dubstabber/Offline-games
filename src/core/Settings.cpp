@@ -94,7 +94,7 @@ constexpr std::array<FloatField, 1> kFloatFields{{
 
 // Order here is also the on-disk serialize order, so it must not change without
 // matching serialize(). clampMin floors each field (levels at 1, scores at 0).
-constexpr std::array<IntField, 37> kIntFields{{
+constexpr std::array<IntField, 40> kIntFields{{
     {.key = "tapmatchLevelEasy", .member = &Settings::tapmatchLevelEasy, .clampMin = 1},
     {.key = "tapmatchLevelMedium", .member = &Settings::tapmatchLevelMedium, .clampMin = 1},
     {.key = "tapmatchLevelHard", .member = &Settings::tapmatchLevelHard, .clampMin = 1},
@@ -138,6 +138,9 @@ constexpr std::array<IntField, 37> kIntFields{{
     {.key = "arrowsLevelEasy", .member = &Settings::arrowsLevelEasy, .clampMin = 1},
     {.key = "arrowsLevelMedium", .member = &Settings::arrowsLevelMedium, .clampMin = 1},
     {.key = "arrowsLevelHard", .member = &Settings::arrowsLevelHard, .clampMin = 1},
+    {.key = "mahjongLevelEasy", .member = &Settings::mahjongLevelEasy, .clampMin = 1},
+    {.key = "mahjongLevelMedium", .member = &Settings::mahjongLevelMedium, .clampMin = 1},
+    {.key = "mahjongLevelHard", .member = &Settings::mahjongLevelHard, .clampMin = 1},
 }};
 
 // Apply one parsed key=value line to the matching field. Unknown keys are

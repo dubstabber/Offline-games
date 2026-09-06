@@ -41,6 +41,9 @@ void testRoundTripDefaults() {
     assert(back.arrowsLevelEasy == def.arrowsLevelEasy);
     assert(back.arrowsLevelMedium == def.arrowsLevelMedium);
     assert(back.arrowsLevelHard == def.arrowsLevelHard);
+    assert(back.mahjongLevelEasy == def.mahjongLevelEasy);
+    assert(back.mahjongLevelMedium == def.mahjongLevelMedium);
+    assert(back.mahjongLevelHard == def.mahjongLevelHard);
 }
 
 // Custom values survive the round-trip too (volume to 2 decimals).
@@ -69,6 +72,9 @@ void testRoundTripCustom() {
     s.arrowsLevelEasy = 11;
     s.arrowsLevelMedium = 8;
     s.arrowsLevelHard = 2;
+    s.mahjongLevelEasy = 5;
+    s.mahjongLevelMedium = 3;
+    s.mahjongLevelHard = 9;
     const Settings back = parse(serialize(s));
     assert(back.darkMode);
     assert(nearly(back.volume, 0.35F));
@@ -93,6 +99,9 @@ void testRoundTripCustom() {
     assert(back.arrowsLevelEasy == 11);
     assert(back.arrowsLevelMedium == 8);
     assert(back.arrowsLevelHard == 2);
+    assert(back.mahjongLevelEasy == 5);
+    assert(back.mahjongLevelMedium == 3);
+    assert(back.mahjongLevelHard == 9);
 }
 
 // Empty or whitespace-only input yields the defaults.

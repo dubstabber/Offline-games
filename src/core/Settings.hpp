@@ -82,6 +82,11 @@ struct Settings {
     int arrowsLevelEasy = 1;
     int arrowsLevelMedium = 1;
     int arrowsLevelHard = 1;
+    // Mahjong progress: the current level (1-based) reached in each difficulty;
+    // levels cycle through the tier's layouts with a per-level deal.
+    int mahjongLevelEasy = 1;
+    int mahjongLevelMedium = 1;
+    int mahjongLevelHard = 1;
 };
 
 // Pure and SDL-free (so they are unit-testable): turn Settings into the on-disk
