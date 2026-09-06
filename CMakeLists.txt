@@ -99,6 +99,8 @@ add_library(engine STATIC
     src/games/arrows/ArrowsBoard.cpp
     src/games/arrows/ArrowsGenerator.cpp
     src/games/arrows/ArrowsScene.cpp
+    src/games/mahjong/MahjongBoard.cpp
+    src/games/mahjong/MahjongLayouts.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
     src/scenes/SettingsScene.cpp)

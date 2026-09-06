@@ -102,3 +102,7 @@ add_test(NAME solitaire_deals COMMAND test_solitaire_deals)
 add_executable(test_arrows test_arrows.cpp)
 target_link_libraries(test_arrows PRIVATE engine)
 add_test(NAME arrows COMMAND test_arrows)
+
+add_executable(test_mahjong test_mahjong.cpp)
+target_link_libraries(test_mahjong PRIVATE engine)
+add_test(NAME mahjong COMMAND test_mahjong)
