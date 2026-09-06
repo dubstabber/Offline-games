@@ -82,3 +82,7 @@ add_test(NAME memory COMMAND test_memory)
 add_executable(test_memory_bot test_memory_bot.cpp)
 target_link_libraries(test_memory_bot PRIVATE engine)
 add_test(NAME memory_bot COMMAND test_memory_bot)
+
+add_executable(test_klondike test_klondike.cpp)
+target_link_libraries(test_klondike PRIVATE engine)
+add_test(NAME klondike COMMAND test_klondike)
