@@ -66,6 +66,11 @@ struct Settings {
     int holeBestEasy = 0;
     int holeBestMedium = 0;
     int holeBestHard = 0;
+    // 2048 best score per difficulty (board size). Shown on the score card and
+    // the result overlay; each difficulty tracks separately.
+    int twentyFortyEightBestEasy = 0;
+    int twentyFortyEightBestMedium = 0;
+    int twentyFortyEightBestHard = 0;
 };
 
 // Pure and SDL-free (so they are unit-testable): turn Settings into the on-disk

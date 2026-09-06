@@ -87,6 +87,8 @@ add_library(engine STATIC
     src/games/hexanaut/HexanautScene.cpp
     src/games/hole/HoleWorld.cpp
     src/games/hole/HoleScene.cpp
+    src/games/twentyfortyeight/TwentyFortyEightBoard.cpp
+    src/games/twentyfortyeight/TwentyFortyEightScene.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
     src/scenes/SettingsScene.cpp)

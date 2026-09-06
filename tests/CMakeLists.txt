@@ -70,3 +70,7 @@ add_test(NAME hexanaut COMMAND test_hexanaut)
 add_executable(test_hole test_hole.cpp)
 target_link_libraries(test_hole PRIVATE engine)
 add_test(NAME hole COMMAND test_hole)
+
+add_executable(test_twentyfortyeight test_twentyfortyeight.cpp)
+target_link_libraries(test_twentyfortyeight PRIVATE engine)
+add_test(NAME twentyfortyeight COMMAND test_twentyfortyeight)

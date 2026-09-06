@@ -9,6 +9,7 @@
 #include "games/sokoban/SokobanScene.hpp"
 #include "games/tapmatch/TapMatchScene.hpp"
 #include "games/tictactoe/TicTacToeScene.hpp"
+#include "games/twentyfortyeight/TwentyFortyEightScene.hpp"
 
 #include <memory>
 
@@ -139,6 +140,19 @@ const std::vector<GameInfo>& gameRegistry() {
             },
         });
 
+        list.push_back(GameInfo{
+            .id = "2048",
+            .title = "2048",
+            .emoji = "\xF0\x9F\x94\xA2", // 🔢
+            .description = "Swipe to slide the tiles. Two tiles with the same number merge into "
+                           "one when they touch. Keep merging to reach the goal tile \xE2\x80\x94 "
+                           "a bigger board is easier, a 3x3 board is a real squeeze.",
+            .accent = colors::mediumOrange,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<TwentyFortyEightScene>(manager, difficulty);
+            },
+        });
+
         // Placeholder cards for games not built yet: a title/emoji/accent so the
         // menu has something to show and scroll, but no `create` factory, so the
         // menu marks them "SOON" and they don't open. Implement one by giving it
@@ -153,7 +167,6 @@ const std::vector<GameInfo>& gameRegistry() {
                                     .create = nullptr});
         };
         placeholder("memory", "Memory", "\xF0\x9F\xA7\xA0", colors::botCyan);          // 🧠
-        placeholder("2048", "2048", "\xF0\x9F\x94\xA2", colors::mediumOrange);         // 🔢
         placeholder("connect4", "Connect 4", "\xF0\x9F\x94\xB4", colors::menuPurple);  // 🔴
         placeholder("solitaire", "Solitaire", "\xF0\x9F\x83\x8F", colors::menuYellow); // 🃏
         placeholder("puzzle", "Puzzle", "\xF0\x9F\xA7\xA9", colors::easyGreen);        // 🧩

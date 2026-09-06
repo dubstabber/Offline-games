@@ -32,6 +32,9 @@ void testRoundTripDefaults() {
     assert(back.nibblesLevelEasy == def.nibblesLevelEasy);
     assert(back.nibblesLevelMedium == def.nibblesLevelMedium);
     assert(back.nibblesLevelHard == def.nibblesLevelHard);
+    assert(back.twentyFortyEightBestEasy == def.twentyFortyEightBestEasy);
+    assert(back.twentyFortyEightBestMedium == def.twentyFortyEightBestMedium);
+    assert(back.twentyFortyEightBestHard == def.twentyFortyEightBestHard);
 }
 
 // Custom values survive the round-trip too (volume to 2 decimals).
@@ -51,6 +54,9 @@ void testRoundTripCustom() {
     s.nibblesLevelEasy = 4;
     s.nibblesLevelMedium = 15;
     s.nibblesLevelHard = 26;
+    s.twentyFortyEightBestEasy = 12345;
+    s.twentyFortyEightBestMedium = 20480;
+    s.twentyFortyEightBestHard = 1500;
     const Settings back = parse(serialize(s));
     assert(back.darkMode);
     assert(nearly(back.volume, 0.35F));
@@ -66,6 +72,9 @@ void testRoundTripCustom() {
     assert(back.nibblesLevelEasy == 4);
     assert(back.nibblesLevelMedium == 15);
     assert(back.nibblesLevelHard == 26);
+    assert(back.twentyFortyEightBestEasy == 12345);
+    assert(back.twentyFortyEightBestMedium == 20480);
+    assert(back.twentyFortyEightBestHard == 1500);
 }
 
 // Empty or whitespace-only input yields the defaults.
