@@ -56,6 +56,14 @@ struct Theme {
     Color tfeBg;    // screen background
     Color tfeBoard; // board panel + score cards (the tiles' warm grey frame)
     Color tfeCell;  // empty cell
+
+    // Memory.
+    Color memBgYou;        // table on the player's turn (the screen crossfades)
+    Color memBgBot;        // table on the bot's turn
+    Color memPanel;        // scoreboard panel
+    Color memCardBack;     // face-down card
+    Color memCardBackRing; // the ring pattern on a face-down card
+    Color memCardFace;     // face-up card (light, backs the emoji)
 };
 
 // Light theme = the project's current colors (verbatim, so default builds look
@@ -101,6 +109,13 @@ inline constexpr Theme kLight{
     .tfeBg = colors::cream,         // the classic 2048 off-white, matching the menu
     .tfeBoard = rgb(187, 173, 160), // the classic warm grey frame
     .tfeCell = rgb(205, 193, 180),  // the classic empty cell
+
+    .memBgYou = rgb(196, 80, 88),        // rose-red table: your turn
+    .memBgBot = rgb(46, 140, 170),       // teal table: the bot's turn
+    .memPanel = rgb(52, 40, 48),         // dark plum scoreboard
+    .memCardBack = rgb(40, 38, 52),      // the menu's card ink
+    .memCardBackRing = rgb(92, 88, 118), // muted violet ring
+    .memCardFace = rgb(252, 248, 240),   // warm white face
 };
 
 // Dark theme: charcoal chrome with near-white text; each game keeps its hue
@@ -146,6 +161,13 @@ inline constexpr Theme kDark{
     .tfeBg = rgb(20, 20, 24),    // charcoal, like the dark menu
     .tfeBoard = rgb(62, 56, 52), // the warm frame, darkened
     .tfeCell = rgb(84, 76, 70),  // empty cell, darkened
+
+    .memBgYou = rgb(74, 30, 36),    // deep wine table: your turn
+    .memBgBot = rgb(20, 54, 66),    // deep teal table: the bot's turn
+    .memPanel = rgb(34, 28, 32),    // darker plum scoreboard
+    .memCardBack = rgb(70, 68, 88), // lifted so it reads on the dark table
+    .memCardBackRing = rgb(112, 108, 140),
+    .memCardFace = rgb(236, 232, 226), // stays light to back the emoji
 };
 
 // The active theme, selected by Settings::darkMode. Scenes call this fresh every

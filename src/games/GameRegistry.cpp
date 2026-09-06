@@ -3,6 +3,7 @@
 #include "games/blockfill/BlockFillScene.hpp"
 #include "games/hexanaut/HexanautScene.hpp"
 #include "games/hole/HoleScene.hpp"
+#include "games/memory/MemoryScene.hpp"
 #include "games/minesweeper/MineSweeperScene.hpp"
 #include "games/nibbles/NibblesScene.hpp"
 #include "games/snake/SnakeScene.hpp"
@@ -153,6 +154,19 @@ const std::vector<GameInfo>& gameRegistry() {
             },
         });
 
+        list.push_back(GameInfo{
+            .id = "memory",
+            .title = "Memory",
+            .emoji = "\xF0\x9F\xA7\xA0", // 🧠
+            .description = "Flip two cards to find matching pairs. A match is yours to keep and "
+                           "earns another turn; a miss turns the cards back and hands the turn "
+                           "to the bot. Collect more pairs than the bot to win.",
+            .accent = colors::botCyan,
+            .create = [](SceneManager& manager, Difficulty difficulty) -> std::unique_ptr<Scene> {
+                return std::make_unique<MemoryScene>(manager, difficulty);
+            },
+        });
+
         // Placeholder cards for games not built yet: a title/emoji/accent so the
         // menu has something to show and scroll, but no `create` factory, so the
         // menu marks them "SOON" and they don't open. Implement one by giving it
@@ -166,7 +180,6 @@ const std::vector<GameInfo>& gameRegistry() {
                                     .accent = accent,
                                     .create = nullptr});
         };
-        placeholder("memory", "Memory", "\xF0\x9F\xA7\xA0", colors::botCyan);          // 🧠
         placeholder("connect4", "Connect 4", "\xF0\x9F\x94\xB4", colors::menuPurple);  // 🔴
         placeholder("solitaire", "Solitaire", "\xF0\x9F\x83\x8F", colors::menuYellow); // 🃏
         placeholder("puzzle", "Puzzle", "\xF0\x9F\xA7\xA9", colors::easyGreen);        // 🧩
