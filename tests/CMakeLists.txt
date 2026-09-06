@@ -74,3 +74,7 @@ add_test(NAME hole COMMAND test_hole)
 add_executable(test_twentyfortyeight test_twentyfortyeight.cpp)
 target_link_libraries(test_twentyfortyeight PRIVATE engine)
 add_test(NAME twentyfortyeight COMMAND test_twentyfortyeight)
+
+add_executable(test_memory test_memory.cpp)
+target_link_libraries(test_memory PRIVATE engine)
+add_test(NAME memory COMMAND test_memory)
