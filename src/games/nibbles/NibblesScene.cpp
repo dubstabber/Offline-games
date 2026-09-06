@@ -38,6 +38,12 @@ constexpr float kDpadCx = layout::kWidthF / 2.0F;
 constexpr float kDpadCy = 1190.0F;
 constexpr float kDpadGap = 120.0F;
 constexpr float kDpadRadius = 55.0F;
+// D-pad glyphs are color emoji: IconButton rasterizes plain text in white, which
+// vanishes on the light theme's white disc.
+constexpr const char* kUpGlyph = "\xE2\x8F\xAB";    // ⏫
+constexpr const char* kDownGlyph = "\xE2\x8F\xAC";  // ⏬
+constexpr const char* kLeftGlyph = "\xE2\x8F\xAA";  // ⏪
+constexpr const char* kRightGlyph = "\xE2\x8F\xA9"; // ⏩
 constexpr float kButtonRowY = 850.0F;
 constexpr float kSwipeThreshold = 44.0F;
 
@@ -195,10 +201,10 @@ NibblesScene::NibblesScene(SceneManager& manager, Difficulty difficulty, int lev
       rightButton_(IconButton::Icon::Glyph, kDpadCx + kDpadGap, kDpadCy, kDpadRadius),
       overlay_(color(difficulty_), colors::white, kButtonRowY) {
     backButton_.setOnTap([this] { manager_.pop(); });
-    upButton_.setGlyph("^", 58.0F);
-    downButton_.setGlyph("v", 58.0F);
-    leftButton_.setGlyph("<", 58.0F);
-    rightButton_.setGlyph(">", 58.0F);
+    upButton_.setGlyph(kUpGlyph, 58.0F);
+    downButton_.setGlyph(kDownGlyph, 58.0F);
+    leftButton_.setGlyph(kLeftGlyph, 58.0F);
+    rightButton_.setGlyph(kRightGlyph, 58.0F);
     upButton_.setOnTap([this] { queueDirection(nibbles::Direction::Up); });
     downButton_.setOnTap([this] { queueDirection(nibbles::Direction::Down); });
     leftButton_.setOnTap([this] { queueDirection(nibbles::Direction::Left); });

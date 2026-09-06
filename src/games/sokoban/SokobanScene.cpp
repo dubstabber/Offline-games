@@ -50,8 +50,14 @@ constexpr Color kBoxLine = rgb(116, 72, 42);
 constexpr Color kPlayer = rgb(74, 170, 224);
 constexpr Color kPlayerFace = rgb(244, 246, 250);
 
-constexpr const char* kUndoGlyph = "U";
+// Button glyphs are color emoji: IconButton rasterizes plain text in white, which
+// vanishes on the light theme's white disc.
+constexpr const char* kUndoGlyph = "\xF0\x9F\x94\x99";  // 🔙
 constexpr const char* kResetGlyph = "\xF0\x9F\x94\x84"; // 🔄
+constexpr const char* kUpGlyph = "\xE2\x8F\xAB";        // ⏫
+constexpr const char* kDownGlyph = "\xE2\x8F\xAC";      // ⏬
+constexpr const char* kLeftGlyph = "\xE2\x8F\xAA";      // ⏪
+constexpr const char* kRightGlyph = "\xE2\x8F\xA9";     // ⏩
 
 [[nodiscard]] int difficultyTier(Difficulty difficulty) {
     return static_cast<int>(difficulty);
@@ -117,14 +123,14 @@ SokobanScene::SokobanScene(SceneManager& manager, Difficulty difficulty, int lev
       rightButton_(IconButton::Icon::Glyph, kDpadCx + kDpadGap, kDpadCy, kDpadRadius),
       overlay_(color(difficulty_), colors::white, kButtonRowY) {
     backButton_.setOnTap([this] { manager_.pop(); });
-    undoButton_.setGlyph(kUndoGlyph, 44.0F);
+    undoButton_.setGlyph(kUndoGlyph, 50.0F);
     undoButton_.setOnTap([this] { board_.undo(); });
     resetButton_.setGlyph(kResetGlyph, 50.0F);
     resetButton_.setOnTap([this] { board_.reset(); });
-    upButton_.setGlyph("^", 58.0F);
-    downButton_.setGlyph("v", 58.0F);
-    leftButton_.setGlyph("<", 58.0F);
-    rightButton_.setGlyph(">", 58.0F);
+    upButton_.setGlyph(kUpGlyph, 58.0F);
+    downButton_.setGlyph(kDownGlyph, 58.0F);
+    leftButton_.setGlyph(kLeftGlyph, 58.0F);
+    rightButton_.setGlyph(kRightGlyph, 58.0F);
     upButton_.setOnTap([this] { tryMove(SokobanBoard::Direction::Up); });
     downButton_.setOnTap([this] { tryMove(SokobanBoard::Direction::Down); });
     leftButton_.setOnTap([this] { tryMove(SokobanBoard::Direction::Left); });
