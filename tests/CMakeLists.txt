@@ -78,3 +78,7 @@ add_test(NAME twentyfortyeight COMMAND test_twentyfortyeight)
 add_executable(test_memory test_memory.cpp)
 target_link_libraries(test_memory PRIVATE engine)
 add_test(NAME memory COMMAND test_memory)
+
+add_executable(test_memory_bot test_memory_bot.cpp)
+target_link_libraries(test_memory_bot PRIVATE engine)
+add_test(NAME memory_bot COMMAND test_memory_bot)

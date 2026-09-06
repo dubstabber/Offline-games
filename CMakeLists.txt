@@ -90,6 +90,7 @@ add_library(engine STATIC
     src/games/twentyfortyeight/TwentyFortyEightBoard.cpp
     src/games/twentyfortyeight/TwentyFortyEightScene.cpp
     src/games/memory/MemoryBoard.cpp
+    src/games/memory/MemoryBot.cpp
     src/scenes/DifficultySelectScene.cpp
     src/scenes/MenuScene.cpp
     src/scenes/SettingsScene.cpp)
