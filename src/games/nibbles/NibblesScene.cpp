@@ -194,7 +194,7 @@ NibblesScene::NibblesScene(SceneManager& manager, Difficulty difficulty, int lev
     : manager_(manager), difficulty_(difficulty), level_(std::max(1, level)),
       world_(levelFor(level_), nibbles::nibblesConfigForDifficulty(difficultyIndex(difficulty_)),
              std::random_device{}()),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kTopButtonRadius),
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kTopButtonRadius),
       upButton_(IconButton::Icon::Glyph, kDpadCx, kDpadCy - kDpadGap, kDpadRadius),
       downButton_(IconButton::Icon::Glyph, kDpadCx, kDpadCy + kDpadGap, kDpadRadius),
       leftButton_(IconButton::Icon::Glyph, kDpadCx - kDpadGap, kDpadCy, kDpadRadius),

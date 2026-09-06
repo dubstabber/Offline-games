@@ -52,7 +52,7 @@ constexpr Color kPlayerFace = rgb(244, 246, 250);
 
 // Button glyphs are color emoji: IconButton rasterizes plain text in white, which
 // vanishes on the light theme's white disc.
-constexpr const char* kUndoGlyph = "\xF0\x9F\x94\x99";  // 🔙
+constexpr const char* kUndoGlyph = "\xE2\x86\xA9";      // ↩
 constexpr const char* kResetGlyph = "\xF0\x9F\x94\x84"; // 🔄
 constexpr const char* kUpGlyph = "\xE2\x8F\xAB";        // ⏫
 constexpr const char* kDownGlyph = "\xE2\x8F\xAC";      // ⏬
@@ -114,7 +114,7 @@ int sokobanSavedLevel(Difficulty difficulty) {
 SokobanScene::SokobanScene(SceneManager& manager, Difficulty difficulty, int level)
     : manager_(manager), difficulty_(difficulty), level_(std::max(1, level)),
       board_(boardFor(difficulty, level_)),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kTopButtonRadius),
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kTopButtonRadius),
       undoButton_(IconButton::Icon::Glyph, kUndoCx, kBackCy, kTopButtonRadius),
       resetButton_(IconButton::Icon::Glyph, kResetCx, kBackCy, kTopButtonRadius),
       upButton_(IconButton::Icon::Glyph, kDpadCx, kDpadCy - kDpadGap, kDpadRadius),

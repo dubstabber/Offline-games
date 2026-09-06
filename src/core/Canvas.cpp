@@ -6,12 +6,110 @@
 #include <array>
 #include <charconv>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <numbers>
 #include <span>
+#include <string>
+#include <string_view>
 #include <vector>
 
 namespace og {
 namespace {
+
+// ---- Emoji detection ----------------------------------------------------------
+// The text font (DejaVu Sans) carries monochrome pictographs for a fair number of
+// emoji code points (🙂 😐 😈 ⬅ ↩ ◀ …). SDL_ttf only consults the emoji fallback
+// for glyphs the primary font lacks, so those would render as tinted outlines
+// instead of color emoji. Strings that are nothing but emoji are therefore drawn
+// with the emoji font directly (see Canvas::fontFor).
+
+constexpr std::uint32_t kReplacement = 0xFFFD;
+constexpr std::uint32_t kZeroWidthJoiner = 0x200D;
+constexpr std::uint32_t kKeycap = 0x20E3;
+constexpr std::uint32_t kVariationText = 0xFE0E;
+constexpr std::uint32_t kVariationEmoji = 0xFE0F;
+
+// Decode one UTF-8 code point at `pos`, advancing it; a malformed byte decodes
+// as U+FFFD and advances by one.
+[[nodiscard]] std::uint32_t nextCodepoint(std::string_view s, std::size_t& pos) {
+    const auto byte = [&](std::size_t i) {
+        return static_cast<std::uint32_t>(static_cast<unsigned char>(s.at(i)));
+    };
+    const std::uint32_t lead = byte(pos);
+    std::size_t len = 1;
+    std::uint32_t cp = lead;
+    if (lead >= 0xF0) {
+        len = 4;
+        cp = lead & 0x07U;
+    } else if (lead >= 0xE0) {
+        len = 3;
+        cp = lead & 0x0FU;
+    } else if (lead >= 0xC0) {
+        len = 2;
+        cp = lead & 0x1FU;
+    }
+    if (len > 1 && pos + len > s.size()) {
+        pos += 1;
+        return kReplacement;
+    }
+    for (std::size_t i = 1; i < len; ++i) {
+        const std::uint32_t cont = byte(pos + i);
+        if ((cont & 0xC0U) != 0x80U) {
+            pos += 1;
+            return kReplacement;
+        }
+        cp = (cp << 6U) | (cont & 0x3FU);
+    }
+    pos += len;
+    return cp;
+}
+
+// Blocks that hold emoji (arrows, technical, geometric, misc symbols, dingbats,
+// misc symbols & arrows, and everything from U+1F000 up). Whether a code point
+// in them is really an emoji is settled by asking the emoji font for the glyph.
+[[nodiscard]] bool emojiRange(std::uint32_t cp) {
+    return (cp >= 0x2190 && cp <= 0x21FF) || (cp >= 0x2300 && cp <= 0x23FF) ||
+           (cp >= 0x25A0 && cp <= 0x25FF) || (cp >= 0x2600 && cp <= 0x27BF) ||
+           (cp >= 0x2900 && cp <= 0x297F) || (cp >= 0x2B00 && cp <= 0x2BFF) ||
+           (cp >= 0x1F000 && cp <= 0x1FAFF);
+}
+
+[[nodiscard]] bool emojiJoiner(std::uint32_t cp) {
+    return cp == kVariationEmoji || cp == kZeroWidthJoiner || cp == kKeycap;
+}
+
+// True if `str` is entirely emoji (plus joiners / the emoji variation selector)
+// that `emojiFont` can draw. A text variation selector (U+FE0E) opts out.
+[[nodiscard]] bool emojiOnly(std::string_view str, TTF_Font* emojiFont) {
+    bool sawEmoji = false;
+    std::size_t pos = 0;
+    while (pos < str.size()) {
+        const std::uint32_t cp = nextCodepoint(str, pos);
+        if (emojiJoiner(cp)) {
+            continue;
+        }
+        if (cp == kVariationText || !emojiRange(cp) || !TTF_FontHasGlyph(emojiFont, cp)) {
+            return false;
+        }
+        sawEmoji = true;
+    }
+    return sawEmoji;
+}
+
+// The emoji font has no use for U+FE0F; drop it so it can't surface as a box.
+[[nodiscard]] std::string withoutEmojiSelectors(std::string_view str) {
+    std::string out;
+    out.reserve(str.size());
+    std::size_t pos = 0;
+    while (pos < str.size()) {
+        const std::size_t start = pos;
+        if (nextCodepoint(str, pos) != kVariationEmoji) {
+            out.append(str.substr(start, pos - start));
+        }
+    }
+    return out;
+}
 
 constexpr int kCircleSegments = 32;
 
@@ -187,9 +285,15 @@ const Canvas::CachedText* Canvas::rasterize(std::string_view str, float pixelSiz
         return &it->second;
     }
 
-    TTF_Font* font = fonts_.fontForSize(pixelSize);
+    TTF_Font* font = fontFor(str, pixelSize);
     if (font == nullptr) {
         return nullptr;
+    }
+    std::string stripped;
+    if (font == fonts_.emojiFontForSize(pixelSize) &&
+        str.find("\xEF\xB8\x8F") != std::string_view::npos) {
+        stripped = withoutEmojiSelectors(str);
+        str = stripped;
     }
     SurfacePtr surface{TTF_RenderText_Blended(font, str.data(), str.size(), color)};
     if (!surface) {
@@ -261,6 +365,14 @@ void Canvas::emojiCentered(std::string_view str, float cx, float cy, float size)
     const float h = cached->h * scale;
     const SDL_FRect dst{.x = cx - (w / 2.0F), .y = cy - (h / 2.0F), .w = w, .h = h};
     SDL_RenderTexture(renderer_, cached->texture.get(), nullptr, &dst);
+}
+
+TTF_Font* Canvas::fontFor(std::string_view str, float pixelSize) {
+    TTF_Font* emoji = fonts_.emojiFontForSize(pixelSize);
+    if (emoji != nullptr && emojiOnly(str, emoji)) {
+        return emoji;
+    }
+    return fonts_.fontForSize(pixelSize);
 }
 
 Canvas::Size Canvas::measure(std::string_view str, float pixelSize) {

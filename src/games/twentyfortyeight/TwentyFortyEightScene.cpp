@@ -28,7 +28,7 @@ constexpr float kUndoCx = layout::kWidthF - 220.0F;
 constexpr float kRestartCx = layout::kWidthF - 92.0F;
 // Button glyphs are color emoji: IconButton rasterizes plain text in white, which
 // vanishes on the light theme's white disc.
-constexpr const char* kUndoGlyph = "\xF0\x9F\x94\x99";    // 🔙
+constexpr const char* kUndoGlyph = "\xE2\x86\xA9";        // ↩
 constexpr const char* kRestartGlyph = "\xF0\x9F\x94\x84"; // 🔄
 constexpr float kTitleCy = 100.0F;
 constexpr float kDifficultyCy = 172.0F;
@@ -147,7 +147,7 @@ TwentyFortyEightScene::TwentyFortyEightScene(SceneManager& manager, Difficulty d
     : manager_(manager), difficulty_(difficulty),
       params_(twentyFortyEightParams(difficultyToIndex(difficulty))),
       board_(params_.size, std::random_device{}()), best_(bestField(settings(), difficulty)),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kBackRadius),
       undoButton_(IconButton::Icon::Glyph, kUndoCx, kBackCy, kBackRadius),
       restartButton_(IconButton::Icon::Glyph, kRestartCx, kBackCy, kBackRadius),
       overlay_(color(difficulty), colors::white, kButtonRowY) {

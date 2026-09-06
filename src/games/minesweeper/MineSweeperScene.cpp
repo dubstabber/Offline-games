@@ -127,7 +127,7 @@ struct DiffConfig {
 
 MineSweeperScene::MineSweeperScene(SceneManager& manager, Difficulty difficulty)
     : manager_(manager), difficulty_(difficulty), board_(boardFor(difficulty)),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kBackRadius),
       resetButton_(IconButton::Icon::Glyph, kResetCx, kResetCy, kResetRadius),
       currentStreak_(currentStreakField(settings(), difficulty)),
       bestStreak_(bestStreakField(settings(), difficulty)),

@@ -144,7 +144,7 @@ HoleScene::HoleScene(SceneManager& manager, Difficulty difficulty)
     : manager_(manager), difficulty_(difficulty),
       world_(difficultyToIndex(difficulty), std::random_device{}()), camX_(world_.player().pos.x),
       camY_(world_.player().pos.y),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kBackRadius),
       bestScore_(holeBestField(settings(), difficulty)),
       overlay_(color(difficulty_), colors::white, kButtonRowY) {
     backButton_.setOnTap([this] { manager_.pop(); });

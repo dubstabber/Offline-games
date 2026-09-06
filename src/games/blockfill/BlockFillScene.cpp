@@ -90,7 +90,7 @@ int blockFillSavedLevel(Difficulty difficulty) {
 BlockFillScene::BlockFillScene(SceneManager& manager, Difficulty difficulty, int level)
     : manager_(manager), difficulty_(difficulty), level_(std::max(1, level)),
       board_(boardFor(difficulty, level)),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kBackRadius),
       resetButton_(IconButton::Icon::Glyph, kResetCx, kResetCy, kResetRadius),
       overlay_(color(difficulty_), colors::white, kButtonRowY) {
     backButton_.setOnTap([this] { manager_.pop(); });

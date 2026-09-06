@@ -84,8 +84,7 @@ std::vector<std::string> wrapText(Canvas& canvas, const std::string& text, float
 DifficultySelectScene::DifficultySelectScene(SceneManager& manager, GameInfo info)
     : manager_(manager), info_(std::move(info)),
       stops_(std::clamp(info_.difficultyCount, 2, 4)), // Difficulty has at most 4 values
-      titleUpper_(info_.title),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      titleUpper_(info_.title), backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kBackRadius),
       playButton_("PLAY", kPlayX, kPlayY, kPlayW, kPlayH) {
     backButton_.setOnTap([this] { manager_.pop(); });
     std::ranges::transform(titleUpper_, titleUpper_.begin(),
@@ -179,8 +178,7 @@ void DifficultySelectScene::render(Canvas& canvas) {
         descY += 44.0F;
     }
 
-    canvas.textCentered(faceFor(difficulty_), layout::kWidthF / 2.0F, 560.0F, 150.0F,
-                        color(difficulty_));
+    canvas.emojiCentered(faceFor(difficulty_), layout::kWidthF / 2.0F, 560.0F, 150.0F);
     canvas.textCentered(label(difficulty_), layout::kWidthF / 2.0F, 710.0F, 76.0F,
                         color(difficulty_));
 

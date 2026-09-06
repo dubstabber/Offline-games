@@ -82,6 +82,10 @@ private:
     };
 
     const CachedText* rasterize(std::string_view str, float pixelSize, Color color);
+    // The font to draw `str` with: the color-emoji font when the string is
+    // nothing but emoji it can draw, otherwise the text font (which falls back
+    // to emoji glyph by glyph for mixed strings).
+    TTF_Font* fontFor(std::string_view str, float pixelSize);
 
     SDL_Renderer* renderer_;
     // Non-owning, never-null dependency owned by App for the Canvas's whole

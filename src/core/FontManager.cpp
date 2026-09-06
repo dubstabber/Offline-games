@@ -83,11 +83,11 @@ FontPtr FontManager::openFont(const std::string& path, float size) {
     return font;
 }
 
-TTF_Font* FontManager::fontForSize(float pixelSize) {
+const FontManager::Entry* FontManager::entryForSize(float pixelSize) {
     const int size = static_cast<int>(std::lround(pixelSize));
     for (const Entry& entry : cache_) {
         if (entry.size == size) {
-            return entry.text.get();
+            return &entry;
         }
     }
 
@@ -106,7 +106,17 @@ TTF_Font* FontManager::fontForSize(float pixelSize) {
     }
 
     cache_.push_back(std::move(entry));
-    return cache_.back().text.get();
+    return &cache_.back();
+}
+
+TTF_Font* FontManager::fontForSize(float pixelSize) {
+    const Entry* entry = entryForSize(pixelSize);
+    return entry != nullptr ? entry->text.get() : nullptr;
+}
+
+TTF_Font* FontManager::emojiFontForSize(float pixelSize) {
+    const Entry* entry = entryForSize(pixelSize);
+    return entry != nullptr ? entry->emoji.get() : nullptr;
 }
 
 } // namespace og

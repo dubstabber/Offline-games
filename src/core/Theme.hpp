@@ -20,7 +20,6 @@ struct Theme {
     Color titleText;   // screen titles (flips with the chrome background)
     Color bodyText;    // labels/body text on the chrome background (flips)
     Color mutedText;   // secondary text (descriptions, value labels)
-    Color chevron;     // back-button chevron
     Color backCircle;  // back-button disc
     Color sliderTrack; // unfilled slider track
 
@@ -72,7 +71,6 @@ inline constexpr Theme kLight{
     .titleText = colors::gridBlack,
     .bodyText = rgb(66, 72, 82), // dark slate, like the original's labels
     .mutedText = rgb(96, 84, 80),
-    .chevron = rgb(176, 124, 162),
     .backCircle = colors::white,
     .sliderTrack = rgb(225, 210, 190),
 
@@ -118,7 +116,6 @@ inline constexpr Theme kDark{
     .titleText = rgb(240, 240, 245),
     .bodyText = rgb(236, 236, 240),
     .mutedText = rgb(150, 150, 160),
-    .chevron = rgb(196, 150, 184),
     .backCircle = rgb(44, 44, 50),
     .sliderTrack = rgb(58, 58, 66),
 

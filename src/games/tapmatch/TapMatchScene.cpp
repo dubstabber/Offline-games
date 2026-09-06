@@ -186,7 +186,7 @@ int tapMatchSavedLevel(Difficulty difficulty) {
 TapMatchScene::TapMatchScene(SceneManager& manager, Difficulty difficulty, int level)
     : manager_(manager), difficulty_(difficulty), level_(level),
       board_(boardFor(difficulty, level)),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kBackRadius),
       overlay_(colors::menuPink, colors::white, kButtonRowY) {
     backButton_.setOnTap([this] { manager_.pop(); });
     overlay_.setOnHome([this] { manager_.popToRoot(); });

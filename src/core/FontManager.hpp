@@ -15,9 +15,14 @@ class FontManager {
 public:
     FontManager();
 
-    // Returns a font for the requested logical pixel size, or nullptr if no
-    // usable font could be opened. Ownership stays with the manager.
+    // Returns the text font (with color emoji attached as a fallback) for the
+    // requested logical pixel size, or nullptr if no usable font could be
+    // opened. Ownership stays with the manager.
     TTF_Font* fontForSize(float pixelSize);
+    // The color-emoji font alone for that size (nullptr if unavailable). Canvas
+    // uses it for strings that are nothing but emoji, so pictographs the text
+    // font also carries in monochrome never shadow the color glyph.
+    TTF_Font* emojiFontForSize(float pixelSize);
 
 private:
     struct Entry {
@@ -27,6 +32,9 @@ private:
     };
 
     [[nodiscard]] static FontPtr openFont(const std::string& path, float size);
+    // The cached (or freshly opened) pair for a size; nullptr if the text font
+    // could not be opened. The pointer is only valid until the next call.
+    [[nodiscard]] const Entry* entryForSize(float pixelSize);
 
     std::string textFontPath_;
     std::string emojiFontPath_;

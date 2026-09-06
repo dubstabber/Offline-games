@@ -41,7 +41,9 @@ src/
     Scene             abstract base for menu and every game
     SceneManager      deferred push/pop/replace stack of scenes
     Canvas            the ONLY thing that touches SDL_Renderer; draws shapes +
-                      text/emoji. No images.
+                      text/emoji. No images. Strings that are nothing but emoji
+                      are drawn with the emoji font itself, since the text font
+                      carries monochrome look-alikes for some of them
     FontManager       caches TTF fonts; attaches Noto Color Emoji as a fallback
                       so one render call mixes text and color emoji. Loads the
                       bundled fonts (assets/fonts/, shipped next to the exe via

@@ -42,7 +42,7 @@ constexpr float kBotThinkSeconds = 0.45F;
 
 TicTacToeScene::TicTacToeScene(SceneManager& manager, Difficulty difficulty)
     : manager_(manager), bot_(std::random_device{}()), difficulty_(difficulty),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kBackRadius),
       overlay_(colors::youRed, colors::white, kButtonRowY) {
     backButton_.setOnTap([this] { manager_.pop(); });
     overlay_.setOnHome([this] { manager_.popToRoot(); });

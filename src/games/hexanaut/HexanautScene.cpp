@@ -153,7 +153,7 @@ constexpr float kFallSpeed = 95.0F; // world units/sec
 HexanautScene::HexanautScene(SceneManager& manager, Difficulty difficulty)
     : manager_(manager), difficulty_(difficulty),
       world_(difficultyToIndex(difficulty), std::random_device{}()),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kBackRadius),
       bestPercent_(static_cast<float>(hexanautBestField(settings(), difficulty)) / 10.0F),
       // seed with the starting home territory (world_ is constructed before this)
       lastLivePercent_(world_.playerPercent()),

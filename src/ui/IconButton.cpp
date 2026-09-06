@@ -7,6 +7,12 @@
 #include <utility>
 
 namespace og {
+namespace {
+
+constexpr const char* kBackGlyph = "\xE2\xAC\x85"; // ⬅ (color emoji via the emoji font)
+constexpr float kBackGlyphScale = 0.95F;           // glyph height as a fraction of the radius
+
+} // namespace
 
 IconButton::IconButton(Icon icon, float cx, float cy, float radius)
     : icon_(icon), cx_(cx), cy_(cy), radius_(radius) {}
@@ -42,10 +48,8 @@ bool IconButton::handleInput(const PointerEvent& event) {
 
 void IconButton::render(Canvas& canvas) const {
     canvas.fillCircle(cx_, cy_, radius_, theme().backCircle);
-    if (icon_ == Icon::Chevron) {
-        // A `<` chevron from two lines.
-        canvas.line(cx_ + 12.0F, cy_ - 24.0F, cx_ - 14.0F, cy_, 14.0F, theme().chevron);
-        canvas.line(cx_ - 14.0F, cy_, cx_ + 12.0F, cy_ + 24.0F, 14.0F, theme().chevron);
+    if (icon_ == Icon::Back) {
+        canvas.emojiCentered(kBackGlyph, cx_, cy_, radius_ * kBackGlyphScale);
     } else {
         canvas.emojiCentered(glyph_, cx_, cy_, glyphSize_);
     }

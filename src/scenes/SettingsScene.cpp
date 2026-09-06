@@ -58,7 +58,7 @@ SettingsScene::SettingsScene(SceneManager& manager)
       volumeSlider_(kTrackX, kVolumeTrackCy, kTrackW, 0.0F, 1.0F),
       musicToggle_(kToggleX, toggleY(kMusicRowCy), kToggleW, kToggleH),
       vibrationToggle_(kToggleX, toggleY(kVibrationRowCy), kToggleW, kToggleH),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius) {
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kBackRadius) {
     backButton_.setOnTap([this] { manager_.pop(); });
     darkToggle_.setValue(settings().darkMode);
     darkToggle_.setOnChange([this](bool on) {

@@ -91,7 +91,7 @@ SnakeScene::SnakeScene(SceneManager& manager, Difficulty difficulty)
       world_(difficultyToIndex(difficulty), std::random_device{}()),
       ghost_(std::random_device{}(), kGhostCount), camX_(world_.player().head.x),
       camY_(world_.player().head.y),
-      backButton_(IconButton::Icon::Chevron, kBackCx, kBackCy, kBackRadius),
+      backButton_(IconButton::Icon::Back, kBackCx, kBackCy, kBackRadius),
       bestScore_(snakeBestField(settings(), difficulty)),
       overlay_(color(difficulty_), colors::white, kButtonRowY) {
     backButton_.setOnTap([this] { manager_.pop(); });
