@@ -360,6 +360,14 @@ bool KlondikeGame::undo() {
     return true;
 }
 
+KlondikeGame KlondikeGame::searchCopy() const {
+    KlondikeGame copy(rules_, layout_, false);
+    copy.score_ = score_;
+    copy.moves_ = moves_;
+    copy.passes_ = passes_;
+    return copy;
+}
+
 void KlondikeGame::addScore(int delta) {
     score_ = std::max(0, score_ + delta);
 }

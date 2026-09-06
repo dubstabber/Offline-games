@@ -156,6 +156,10 @@ public:
     [[nodiscard]] bool canUndo() const { return !history_.empty(); }
     bool undo();
 
+    // This position with no history and recording off: the light copy the
+    // solver branches from (score, moves and passes carry over).
+    [[nodiscard]] KlondikeGame searchCopy() const;
+
     // Nothing is hidden and the stock is spent: the rest is a formality that
     // autoCompleteStep() plays one card at a time.
     [[nodiscard]] bool canAutoComplete() const;
